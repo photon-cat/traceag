@@ -31,4 +31,32 @@ final class ABLineTests: XCTestCase {
         XCTAssertEqual(result.crossTrackError, 10.0, accuracy: 0.0001)
         XCTAssertEqual(result.nearestLineIndex, 1)
     }
+
+    func testCurvedABGuidanceCenterline() {
+        let centerline = [
+            CGPoint(x: 0, y: 0),
+            CGPoint(x: 0, y: 10),
+            CGPoint(x: 10, y: 20)
+        ]
+        let engine = CurvedABGuidance(centerline: centerline, lineSpacing: 3.0, linesDirection: .both)
+
+        let result = engine.calculateGuidance(localX: 0, localZ: 5, vehicleHeading: 0, targetLineIndex: 0)
+        XCTAssertEqual(result.crossTrackError, 0.0, accuracy: 0.001)
+        XCTAssertEqual(result.nearestLineIndex, 0)
+        XCTAssertGreaterThan(result.alongTrackDistance, 4.9)
+    }
+
+    func testHeadlandGuidanceRingOffset() {
+        let boundary = [
+            CGPoint(x: -10, y: -10),
+            CGPoint(x: 10, y: -10),
+            CGPoint(x: 10, y: 10),
+            CGPoint(x: -10, y: 10)
+        ]
+        let engine = HeadlandGuidance(boundary: boundary, lineSpacing: 2.0, linesDirection: .both)
+
+        let result = engine.calculateGuidance(localX: 0, localZ: 8, vehicleHeading: 0, targetLineIndex: -1)
+        XCTAssertEqual(result.crossTrackError, 0.0, accuracy: 0.001)
+        XCTAssertEqual(result.nearestLineIndex, -1)
+    }
 }

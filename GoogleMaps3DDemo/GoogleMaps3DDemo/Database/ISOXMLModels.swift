@@ -26,6 +26,8 @@ enum EntityType: String, Codable {
     case task = "TSK"
     case device = "DVC"
     case product = "PDT"
+    case guidanceLine = "GLN"
+    case headland = "HDL"
 }
 
 // MARK: - Task Types
@@ -126,6 +128,84 @@ struct BoundaryPoint: Codable, Equatable, Identifiable {
 
     enum CodingKeys: String, CodingKey {
         case latitude, longitude
+    }
+}
+
+// MARK: - Guidance Geometry Points
+
+/// A single point in a guidance line polyline
+struct GuidancePoint: Codable, Equatable, Identifiable {
+    var id: UUID = UUID()
+    let latitude: Double
+    let longitude: Double
+
+    var coordinate: CLLocationCoordinate2D {
+        CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+    }
+
+    init(latitude: Double, longitude: Double) {
+        self.latitude = latitude
+        self.longitude = longitude
+    }
+
+    init(coordinate: CLLocationCoordinate2D) {
+        self.latitude = coordinate.latitude
+        self.longitude = coordinate.longitude
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case latitude, longitude
+    }
+}
+
+// MARK: - Guidance Line Types
+
+enum GuidanceLineType: String, Codable, CaseIterable {
+    case straightAB = "straight_ab"
+    case curvedAB = "curved_ab"
+}
+
+// MARK: - ISO Guidance Line
+
+struct ISOGuidanceLine: Identifiable, Codable, Equatable {
+    let id: String
+    let partfieldId: String
+    var type: GuidanceLineType
+    var points: [GuidancePoint]
+    var spacingM: Double
+    var headingDeg: Double?
+    var createdAt: Date?
+    var updatedAt: Date?
+
+    init(id: String, partfieldId: String, type: GuidanceLineType, points: [GuidancePoint], spacingM: Double, headingDeg: Double? = nil, createdAt: Date? = nil, updatedAt: Date? = nil) {
+        self.id = id
+        self.partfieldId = partfieldId
+        self.type = type
+        self.points = points
+        self.spacingM = spacingM
+        self.headingDeg = headingDeg
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}
+
+// MARK: - ISO Headland
+
+struct ISOHeadland: Identifiable, Codable, Equatable {
+    let id: String
+    let partfieldId: String
+    var boundary: [BoundaryPoint]
+    var offsetM: Double
+    var createdAt: Date?
+    var updatedAt: Date?
+
+    init(id: String, partfieldId: String, boundary: [BoundaryPoint], offsetM: Double, createdAt: Date? = nil, updatedAt: Date? = nil) {
+        self.id = id
+        self.partfieldId = partfieldId
+        self.boundary = boundary
+        self.offsetM = offsetM
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
     }
 }
 
@@ -284,13 +364,15 @@ struct ISOTask: Identifiable, Codable, Equatable {
     var status: TaskStatus
     var deviceId: String?       // References Device/Implement
     var productId: String?      // References Product (seed, fertilizer, etc.)
+    var guidanceLineId: String?
+    var headlandId: String?
     var notes: String?
     var startedAt: Date?
     var completedAt: Date?
     var createdAt: Date?
     var updatedAt: Date?
 
-    init(id: String, partfieldId: String, name: String, taskType: TaskType, status: TaskStatus = .pending, deviceId: String? = nil, productId: String? = nil, notes: String? = nil, startedAt: Date? = nil, completedAt: Date? = nil, createdAt: Date? = nil, updatedAt: Date? = nil) {
+    init(id: String, partfieldId: String, name: String, taskType: TaskType, status: TaskStatus = .pending, deviceId: String? = nil, productId: String? = nil, guidanceLineId: String? = nil, headlandId: String? = nil, notes: String? = nil, startedAt: Date? = nil, completedAt: Date? = nil, createdAt: Date? = nil, updatedAt: Date? = nil) {
         self.id = id
         self.partfieldId = partfieldId
         self.name = name
@@ -298,6 +380,8 @@ struct ISOTask: Identifiable, Codable, Equatable {
         self.status = status
         self.deviceId = deviceId
         self.productId = productId
+        self.guidanceLineId = guidanceLineId
+        self.headlandId = headlandId
         self.notes = notes
         self.startedAt = startedAt
         self.completedAt = completedAt

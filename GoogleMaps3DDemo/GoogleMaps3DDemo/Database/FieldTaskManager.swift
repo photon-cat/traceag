@@ -34,6 +34,8 @@ final class FieldTaskManager: ObservableObject {
     @Published private(set) var selectedPartfield: ISOPartfield?
     @Published private(set) var tasks: [ISOTask] = []
     @Published private(set) var activeTask: ISOTask?
+    @Published private(set) var guidanceLines: [ISOGuidanceLine] = []
+    @Published private(set) var headlands: [ISOHeadland] = []
 
     // MARK: - Database Reference
 
@@ -123,6 +125,8 @@ final class FieldTaskManager: ObservableObject {
         selectedPartfield = nil
         tasks = []
         activeTask = nil
+        guidanceLines = []
+        headlands = []
     }
 
     /// Creates a new field with boundary polygon
@@ -147,6 +151,8 @@ final class FieldTaskManager: ObservableObject {
                 if let area = partfield.areaM2 {
                     db.updatePartfieldBoundary(id: partfield.id, boundary: boundary!, areaM2: area)
                 }
+
+                _ = db.createHeadland(partfieldId: partfield.id, boundary: boundary!, offsetM: 0.0)
             }
             partfields.append(partfield)
             return partfield
@@ -179,6 +185,8 @@ final class FieldTaskManager: ObservableObject {
     func selectPartfield(_ partfield: ISOPartfield) {
         selectedPartfield = partfield
         loadTasksForPartfield(partfield.id)
+        loadGuidanceLinesForPartfield(partfield.id)
+        loadHeadlandsForPartfield(partfield.id)
     }
 
     func updatePartfieldBoundary(_ partfield: ISOPartfield, boundary: [BoundaryPoint]) {
@@ -216,6 +224,14 @@ final class FieldTaskManager: ObservableObject {
         activeTask = tasks.first { $0.status == .inProgress }
     }
 
+    func loadGuidanceLinesForPartfield(_ partfieldId: String) {
+        guidanceLines = db.getGuidanceLines(for: partfieldId)
+    }
+
+    func loadHeadlandsForPartfield(_ partfieldId: String) {
+        headlands = db.getHeadlands(for: partfieldId)
+    }
+
     /// Creates a new task for the selected partfield
     func createTask(
         name: String,
@@ -236,6 +252,40 @@ final class FieldTaskManager: ObservableObject {
         ) {
             tasks.insert(task, at: 0)
             return task
+        }
+        return nil
+    }
+
+    // MARK: - Guidance Line Operations
+
+    func createGuidanceLineFromABLine(_ abLine: ABLine, spacing: Double) -> ISOGuidanceLine? {
+        guard let partfieldId = selectedPartfield?.id else { return nil }
+        let points = [
+            GuidancePoint(coordinate: abLine.pointA),
+            GuidancePoint(coordinate: abLine.pointB ?? abLine.pointA)
+        ]
+        let headingDeg = abLine.heading * 180 / .pi
+        if let line = db.createGuidanceLine(partfieldId: partfieldId, type: .straightAB, points: points, spacing: spacing, headingDeg: headingDeg) {
+            guidanceLines.insert(line, at: 0)
+            return line
+        }
+        return nil
+    }
+
+    func createCurvedGuidanceLine(points: [GuidancePoint], spacing: Double) -> ISOGuidanceLine? {
+        guard let partfieldId = selectedPartfield?.id else { return nil }
+        if let line = db.createGuidanceLine(partfieldId: partfieldId, type: .curvedAB, points: points, spacing: spacing) {
+            guidanceLines.insert(line, at: 0)
+            return line
+        }
+        return nil
+    }
+
+    func createHeadland(boundary: [BoundaryPoint], offsetM: Double) -> ISOHeadland? {
+        guard let partfieldId = selectedPartfield?.id else { return nil }
+        if let headland = db.createHeadland(partfieldId: partfieldId, boundary: boundary, offsetM: offsetM) {
+            headlands.insert(headland, at: 0)
+            return headland
         }
         return nil
     }

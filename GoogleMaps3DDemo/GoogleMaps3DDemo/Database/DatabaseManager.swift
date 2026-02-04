@@ -148,9 +148,39 @@ final class DatabaseManager {
                 status TEXT DEFAULT 'pending',
                 device_id TEXT,
                 product_id TEXT,
+                guidance_line_id TEXT,
+                headland_id TEXT,
                 notes TEXT,
                 started_at TEXT,
                 completed_at TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (partfield_id) REFERENCES partfields(id) ON DELETE CASCADE
+            )
+        """)
+
+        // Guidance lines (AB / curved)
+        executeSQL("""
+            CREATE TABLE IF NOT EXISTS guidance_lines (
+                id TEXT PRIMARY KEY,
+                partfield_id TEXT NOT NULL,
+                type TEXT NOT NULL,
+                points_json TEXT NOT NULL,
+                spacing_m REAL,
+                heading_deg REAL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (partfield_id) REFERENCES partfields(id) ON DELETE CASCADE
+            )
+        """)
+
+        // Headlands
+        executeSQL("""
+            CREATE TABLE IF NOT EXISTS headlands (
+                id TEXT PRIMARY KEY,
+                partfield_id TEXT NOT NULL,
+                boundary_json TEXT NOT NULL,
+                offset_m REAL,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (partfield_id) REFERENCES partfields(id) ON DELETE CASCADE
@@ -209,6 +239,13 @@ final class DatabaseManager {
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """)
+
+        // Add new columns for task guidance linkage (ignore errors if already present)
+        _ = executeSQL("ALTER TABLE tasks ADD COLUMN guidance_line_id TEXT")
+        _ = executeSQL("ALTER TABLE tasks ADD COLUMN headland_id TEXT")
+
+        executeSQL("CREATE INDEX IF NOT EXISTS idx_guidance_lines_partfield ON guidance_lines(partfield_id)")
+        executeSQL("CREATE INDEX IF NOT EXISTS idx_headlands_partfield ON headlands(partfield_id)")
 
         print("DatabaseManager: Tables created successfully")
     }
@@ -591,12 +628,12 @@ final class DatabaseManager {
 
     // MARK: - Task Operations
 
-    func createTask(partfieldId: String, name: String, taskType: TaskType, deviceId: String? = nil, productId: String? = nil, notes: String? = nil) -> ISOTask? {
+    func createTask(partfieldId: String, name: String, taskType: TaskType, deviceId: String? = nil, productId: String? = nil, guidanceLineId: String? = nil, headlandId: String? = nil, notes: String? = nil) -> ISOTask? {
         let id = generateId(prefix: "TSK")
         var task: ISOTask?
 
         dbQueue.sync {
-            let sql = "INSERT INTO tasks (id, partfield_id, name, task_type, device_id, product_id, notes) VALUES (?, ?, ?, ?, ?, ?, ?)"
+            let sql = "INSERT INTO tasks (id, partfield_id, name, task_type, device_id, product_id, guidance_line_id, headland_id, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
             var stmt: OpaquePointer?
 
             if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
@@ -617,14 +654,26 @@ final class DatabaseManager {
                     sqlite3_bind_null(stmt, 6)
                 }
 
-                if let n = notes {
-                    sqlite3_bind_text(stmt, 7, (n as NSString).utf8String, -1, nil)
+                if let g = guidanceLineId {
+                    sqlite3_bind_text(stmt, 7, (g as NSString).utf8String, -1, nil)
                 } else {
                     sqlite3_bind_null(stmt, 7)
                 }
 
+                if let h = headlandId {
+                    sqlite3_bind_text(stmt, 8, (h as NSString).utf8String, -1, nil)
+                } else {
+                    sqlite3_bind_null(stmt, 8)
+                }
+
+                if let n = notes {
+                    sqlite3_bind_text(stmt, 9, (n as NSString).utf8String, -1, nil)
+                } else {
+                    sqlite3_bind_null(stmt, 9)
+                }
+
                 if sqlite3_step(stmt) == SQLITE_DONE {
-                    task = ISOTask(id: id, partfieldId: partfieldId, name: name, taskType: taskType, status: .pending, deviceId: deviceId, productId: productId, notes: notes)
+                    task = ISOTask(id: id, partfieldId: partfieldId, name: name, taskType: taskType, status: .pending, deviceId: deviceId, productId: productId, guidanceLineId: guidanceLineId, headlandId: headlandId, notes: notes)
                     registerEntity(id: id, type: .task)
                 }
             }
@@ -636,7 +685,7 @@ final class DatabaseManager {
     func getTask(id: String) -> ISOTask? {
         var task: ISOTask?
         dbQueue.sync {
-            let sql = "SELECT id, partfield_id, name, task_type, status, device_id, product_id, notes, started_at, completed_at FROM tasks WHERE id = ?"
+            let sql = "SELECT id, partfield_id, name, task_type, status, device_id, product_id, guidance_line_id, headland_id, notes, started_at, completed_at FROM tasks WHERE id = ?"
             var stmt: OpaquePointer?
 
             if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
@@ -650,7 +699,9 @@ final class DatabaseManager {
                     let statusStr = String(cString: sqlite3_column_text(stmt, 4))
                     let deviceId = sqlite3_column_text(stmt, 5).map { String(cString: $0) }
                     let productId = sqlite3_column_text(stmt, 6).map { String(cString: $0) }
-                    let notes = sqlite3_column_text(stmt, 7).map { String(cString: $0) }
+                    let guidanceLineId = sqlite3_column_text(stmt, 7).map { String(cString: $0) }
+                    let headlandId = sqlite3_column_text(stmt, 8).map { String(cString: $0) }
+                    let notes = sqlite3_column_text(stmt, 9).map { String(cString: $0) }
 
                     task = ISOTask(
                         id: tId,
@@ -660,6 +711,8 @@ final class DatabaseManager {
                         status: TaskStatus(rawValue: statusStr) ?? .pending,
                         deviceId: deviceId,
                         productId: productId,
+                        guidanceLineId: guidanceLineId,
+                        headlandId: headlandId,
                         notes: notes
                     )
                 }
@@ -672,7 +725,7 @@ final class DatabaseManager {
     func getTasksForPartfield(_ partfieldId: String) -> [ISOTask] {
         var tasks: [ISOTask] = []
         dbQueue.sync {
-            let sql = "SELECT id, partfield_id, name, task_type, status, device_id, product_id, notes FROM tasks WHERE partfield_id = ? ORDER BY created_at DESC"
+            let sql = "SELECT id, partfield_id, name, task_type, status, device_id, product_id, guidance_line_id, headland_id, notes FROM tasks WHERE partfield_id = ? ORDER BY created_at DESC"
             var stmt: OpaquePointer?
 
             if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
@@ -686,7 +739,9 @@ final class DatabaseManager {
                     let statusStr = String(cString: sqlite3_column_text(stmt, 4))
                     let deviceId = sqlite3_column_text(stmt, 5).map { String(cString: $0) }
                     let productId = sqlite3_column_text(stmt, 6).map { String(cString: $0) }
-                    let notes = sqlite3_column_text(stmt, 7).map { String(cString: $0) }
+                    let guidanceLineId = sqlite3_column_text(stmt, 7).map { String(cString: $0) }
+                    let headlandId = sqlite3_column_text(stmt, 8).map { String(cString: $0) }
+                    let notes = sqlite3_column_text(stmt, 9).map { String(cString: $0) }
 
                     tasks.append(ISOTask(
                         id: id,
@@ -696,6 +751,8 @@ final class DatabaseManager {
                         status: TaskStatus(rawValue: statusStr) ?? .pending,
                         deviceId: deviceId,
                         productId: productId,
+                        guidanceLineId: guidanceLineId,
+                        headlandId: headlandId,
                         notes: notes
                     ))
                 }
@@ -827,6 +884,151 @@ final class DatabaseManager {
             sqlite3_finalize(stmt)
         }
         return count
+    }
+
+    // MARK: - Guidance Line Operations
+
+    func createGuidanceLine(partfieldId: String, type: GuidanceLineType, points: [GuidancePoint], spacing: Double, headingDeg: Double? = nil) -> ISOGuidanceLine? {
+        let id = generateId(prefix: "GLN")
+        var line: ISOGuidanceLine?
+
+        dbQueue.sync {
+            let sql = "INSERT INTO guidance_lines (id, partfield_id, type, points_json, spacing_m, heading_deg) VALUES (?, ?, ?, ?, ?, ?)"
+            var stmt: OpaquePointer?
+
+            if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+                sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 2, (partfieldId as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 3, (type.rawValue as NSString).utf8String, -1, nil)
+
+                if let jsonData = try? JSONEncoder().encode(points), let jsonStr = String(data: jsonData, encoding: .utf8) {
+                    sqlite3_bind_text(stmt, 4, (jsonStr as NSString).utf8String, -1, nil)
+                } else {
+                    sqlite3_bind_null(stmt, 4)
+                }
+
+                sqlite3_bind_double(stmt, 5, spacing)
+
+                if let headingDeg = headingDeg {
+                    sqlite3_bind_double(stmt, 6, headingDeg)
+                } else {
+                    sqlite3_bind_null(stmt, 6)
+                }
+
+                if sqlite3_step(stmt) == SQLITE_DONE {
+                    line = ISOGuidanceLine(
+                        id: id,
+                        partfieldId: partfieldId,
+                        type: type,
+                        points: points,
+                        spacingM: spacing,
+                        headingDeg: headingDeg
+                    )
+                    registerEntity(id: id, type: .guidanceLine)
+                }
+            }
+            sqlite3_finalize(stmt)
+        }
+        return line
+    }
+
+    func getGuidanceLines(for partfieldId: String) -> [ISOGuidanceLine] {
+        var lines: [ISOGuidanceLine] = []
+        dbQueue.sync {
+            let sql = "SELECT id, partfield_id, type, points_json, spacing_m, heading_deg FROM guidance_lines WHERE partfield_id = ? ORDER BY created_at DESC"
+            var stmt: OpaquePointer?
+
+            if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+                sqlite3_bind_text(stmt, 1, (partfieldId as NSString).utf8String, -1, nil)
+
+                while sqlite3_step(stmt) == SQLITE_ROW {
+                    let id = String(cString: sqlite3_column_text(stmt, 0))
+                    let pId = String(cString: sqlite3_column_text(stmt, 1))
+                    let typeStr = String(cString: sqlite3_column_text(stmt, 2))
+                    let spacing = sqlite3_column_double(stmt, 4)
+                    let heading = sqlite3_column_type(stmt, 5) != SQLITE_NULL ? sqlite3_column_double(stmt, 5) : nil
+
+                    var points: [GuidancePoint] = []
+                    if let jsonStr = sqlite3_column_text(stmt, 3).map({ String(cString: $0) }),
+                       let jsonData = jsonStr.data(using: .utf8),
+                       let decoded = try? JSONDecoder().decode([GuidancePoint].self, from: jsonData) {
+                        points = decoded
+                    }
+
+                    lines.append(ISOGuidanceLine(
+                        id: id,
+                        partfieldId: pId,
+                        type: GuidanceLineType(rawValue: typeStr) ?? .straightAB,
+                        points: points,
+                        spacingM: spacing,
+                        headingDeg: heading
+                    ))
+                }
+            }
+            sqlite3_finalize(stmt)
+        }
+        return lines
+    }
+
+    // MARK: - Headland Operations
+
+    func createHeadland(partfieldId: String, boundary: [BoundaryPoint], offsetM: Double) -> ISOHeadland? {
+        let id = generateId(prefix: "HDL")
+        var headland: ISOHeadland?
+
+        dbQueue.sync {
+            let sql = "INSERT INTO headlands (id, partfield_id, boundary_json, offset_m) VALUES (?, ?, ?, ?)"
+            var stmt: OpaquePointer?
+
+            if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+                sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 2, (partfieldId as NSString).utf8String, -1, nil)
+
+                if let jsonData = try? JSONEncoder().encode(boundary), let jsonStr = String(data: jsonData, encoding: .utf8) {
+                    sqlite3_bind_text(stmt, 3, (jsonStr as NSString).utf8String, -1, nil)
+                } else {
+                    sqlite3_bind_null(stmt, 3)
+                }
+
+                sqlite3_bind_double(stmt, 4, offsetM)
+
+                if sqlite3_step(stmt) == SQLITE_DONE {
+                    headland = ISOHeadland(id: id, partfieldId: partfieldId, boundary: boundary, offsetM: offsetM)
+                    registerEntity(id: id, type: .headland)
+                }
+            }
+            sqlite3_finalize(stmt)
+        }
+        return headland
+    }
+
+    func getHeadlands(for partfieldId: String) -> [ISOHeadland] {
+        var headlands: [ISOHeadland] = []
+        dbQueue.sync {
+            let sql = "SELECT id, partfield_id, boundary_json, offset_m FROM headlands WHERE partfield_id = ? ORDER BY created_at DESC"
+            var stmt: OpaquePointer?
+
+            if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+                sqlite3_bind_text(stmt, 1, (partfieldId as NSString).utf8String, -1, nil)
+
+                while sqlite3_step(stmt) == SQLITE_ROW {
+                    let id = String(cString: sqlite3_column_text(stmt, 0))
+                    let pId = String(cString: sqlite3_column_text(stmt, 1))
+                    let offset = sqlite3_column_double(stmt, 3)
+
+                    var boundary: [BoundaryPoint] = []
+                    if let jsonStr = sqlite3_column_text(stmt, 2).map({ String(cString: $0) }),
+                       let jsonData = jsonStr.data(using: .utf8),
+                       let decoded = try? JSONDecoder().decode([BoundaryPoint].self, from: jsonData) {
+                        boundary = decoded
+                    }
+
+                    headlands.append(ISOHeadland(id: id, partfieldId: pId, boundary: boundary, offsetM: offset))
+                }
+            }
+            sqlite3_finalize(stmt)
+        }
+        return headlands
     }
 
     // MARK: - Delete Operations
