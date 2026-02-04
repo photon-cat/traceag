@@ -19,40 +19,7 @@ import GoogleMaps3D
 struct GoogleMaps3DDemoApp: App {
   var body: some Scene {
     WindowGroup {
-      NavigationView {
-        List {
-          NavigationLink(destination: ContentView()) {
-            Text("Basic Map")
-          }
-          NavigationLink(destination: CameraDemo()) {
-            Text("Camera Demo")
-          }
-          NavigationLink(destination: CameraRestrictionDemo()) {
-            Text("Camera Restrictions Demo")
-          }
-          NavigationLink(destination: MarkerDemo()) {
-            Text("Marker Demo")
-          }
-          NavigationLink(destination: ModelDemo()) {
-            Text("Model Demo")
-          }
-          NavigationLink(destination: ShapesDemo()) {
-            Text("Shapes Demo")
-          }
-          NavigationLink(destination: PlaceTapDemo()) {
-            Text("Place Tap Demo")
-          }
-          NavigationLink(destination: FlyAlongRouteDemo()) {
-            Text("Flight Path Demo")
-          }
-          NavigationLink(destination: MarkerCollisionDemo()) {
-            Text("Marker Collision Demo")
-          }
-          NavigationLink(destination: AgGuidanceDemo()) {
-            Text("Ag Guidance Demo")
-          }
-        }
-      }
+      AppShellView()
 
       .onAppear {
         /*

@@ -17,8 +17,19 @@ import GoogleMaps3D
 
 struct ContentView: View {
     var body: some View {
-      //minimum configuration 3D Map
-      Map(mode: .hybrid)
+        ZStack {
+            FieldBeeColor.mist.ignoresSafeArea()
+            VStack(alignment: .leading, spacing: 16) {
+                FieldBeeSectionHeader("Basic Map", subtitle: "Minimal 3D map configuration.")
+                FieldBeeCard {
+                    Map(mode: .hybrid)
+                        .frame(height: 260)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+                Spacer()
+            }
+            .padding(16)
+        }
     }
 }
 
