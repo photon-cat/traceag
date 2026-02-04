@@ -587,6 +587,7 @@ class AgGuidanceState: ObservableObject {
                     lineSpacing: guidanceSpacing,
                     linesDirection: linesDirection
                 )
+                _ = FieldTaskManager.shared.createGuidanceLineFromABLine(ab, spacing: guidanceSpacing)
             }
 
             abPointState = .complete
