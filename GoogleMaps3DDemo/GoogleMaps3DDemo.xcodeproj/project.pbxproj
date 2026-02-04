@@ -6,8 +6,35 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXContainerItemProxy section */
+		6B6F6AFD6D5A4BAEB8060BCC /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 9DCE69F42DBFD50900A76B23 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 9DCE69FB2DBFD50900A76B23;
+			remoteInfo = GoogleMaps3DDemo;
+		};
+		182F3BA6D6FD497FA9D84FDA /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 9DCE69F42DBFD50900A76B23 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 9DCE69FB2DBFD50900A76B23;
+			remoteInfo = GoogleMaps3DDemo;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXBuildFile section */
 		9DAEBE1D2DDCCB12002CC998 /* GoogleMaps3D in Frameworks */ = {isa = PBXBuildFile; productRef = 9DAEBE1C2DDCCB12002CC998 /* GoogleMaps3D */; };
+		EFC85924B11348DB994674BE /* ABLineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FF634D4E4564C14B83E8917 /* ABLineTests.swift */; };
+		A09537AE8FDC4843BD537F16 /* WorkPointCalculatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 678D60C9270B4C2C89500334 /* WorkPointCalculatorTests.swift */; };
+		61A468EE753F4ED2949E7191 /* VehicleConfigurationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E6CC0CF29394681A5853F63 /* VehicleConfigurationTests.swift */; };
+		4BC544D7A43442A1A31AE687 /* FlightDataLoaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78178DB32E274DE881884387 /* FlightDataLoaderTests.swift */; };
+		FA65E5CA44BC405C8316AAF4 /* FlightPathServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CD78A38DAB64A7BBA804573 /* FlightPathServiceTests.swift */; };
+		705236C9F42343F8B0342B61 /* DatabaseManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8EEC41F7F554673B6A1204F /* DatabaseManagerTests.swift */; };
+		5B6C2C1E50B044168ECCF3EF /* flightpath_test.json in Resources */ = {isa = PBXBuildFile; fileRef = 021DEA068FDE4156BF4690AF /* flightpath_test.json */; };
+		FF8A13FFBE5346339B18997D /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 64C2FF46AE7445CA8F31A876 /* XCTest.framework */; };
+		FE2AA3D340CC45F1BF0C4539 /* GoogleMaps3DDemoUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 815DA7EF0FF04D36AF576A13 /* GoogleMaps3DDemoUITests.swift */; };
+		5CE56EA11F9744E19D38209E /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 64C2FF46AE7445CA8F31A876 /* XCTest.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -25,6 +52,17 @@
 
 /* Begin PBXFileReference section */
 		9DCE69FC2DBFD50900A76B23 /* GoogleMaps3DDemo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GoogleMaps3DDemo.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		EF6F2E7D27D747548161C166 /* GoogleMaps3DDemoTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GoogleMaps3DDemoTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		F0DEDB66DE384C3AB2E43E11 /* GoogleMaps3DDemoUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GoogleMaps3DDemoUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		64C2FF46AE7445CA8F31A876 /* XCTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = XCTest.framework; path = System/Library/Frameworks/XCTest.framework; sourceTree = SDKROOT; };
+		4FF634D4E4564C14B83E8917 /* ABLineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ABLineTests.swift; sourceTree = "<group>"; };
+		678D60C9270B4C2C89500334 /* WorkPointCalculatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkPointCalculatorTests.swift; sourceTree = "<group>"; };
+		1E6CC0CF29394681A5853F63 /* VehicleConfigurationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VehicleConfigurationTests.swift; sourceTree = "<group>"; };
+		78178DB32E274DE881884387 /* FlightDataLoaderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlightDataLoaderTests.swift; sourceTree = "<group>"; };
+		5CD78A38DAB64A7BBA804573 /* FlightPathServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlightPathServiceTests.swift; sourceTree = "<group>"; };
+		D8EEC41F7F554673B6A1204F /* DatabaseManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseManagerTests.swift; sourceTree = "<group>"; };
+		021DEA068FDE4156BF4690AF /* flightpath_test.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = Resources/flightpath_test.json; sourceTree = "<group>"; };
+		815DA7EF0FF04D36AF576A13 /* GoogleMaps3DDemoUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleMaps3DDemoUITests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -57,6 +95,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		8D8DF3C08E91437FAACB889B /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FF8A13FFBE5346339B18997D /* XCTest.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		0F39CC7E760B41F7A5E5AD92 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5CE56EA11F9744E19D38209E /* XCTest.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -64,14 +118,41 @@
 			isa = PBXGroup;
 			children = (
 				9DCE69FE2DBFD50900A76B23 /* GoogleMaps3DDemo */,
+				9BBDF943968743F4A1625DD0 /* GoogleMaps3DDemoTests */,
+				10C793C8EE9E42FD97BB7D5A /* GoogleMaps3DDemoUITests */,
+				64C2FF46AE7445CA8F31A876 /* XCTest.framework */,
 				9DCE69FD2DBFD50900A76B23 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		9BBDF943968743F4A1625DD0 /* GoogleMaps3DDemoTests */ = {
+			isa = PBXGroup;
+			children = (
+				4FF634D4E4564C14B83E8917 /* ABLineTests.swift */,
+				678D60C9270B4C2C89500334 /* WorkPointCalculatorTests.swift */,
+				1E6CC0CF29394681A5853F63 /* VehicleConfigurationTests.swift */,
+				78178DB32E274DE881884387 /* FlightDataLoaderTests.swift */,
+				5CD78A38DAB64A7BBA804573 /* FlightPathServiceTests.swift */,
+				D8EEC41F7F554673B6A1204F /* DatabaseManagerTests.swift */,
+				021DEA068FDE4156BF4690AF /* flightpath_test.json */,
+			);
+			path = GoogleMaps3DDemoTests;
+			sourceTree = "<group>";
+		};
+		10C793C8EE9E42FD97BB7D5A /* GoogleMaps3DDemoUITests */ = {
+			isa = PBXGroup;
+			children = (
+				815DA7EF0FF04D36AF576A13 /* GoogleMaps3DDemoUITests.swift */,
+			);
+			path = GoogleMaps3DDemoUITests;
 			sourceTree = "<group>";
 		};
 		9DCE69FD2DBFD50900A76B23 /* Products */ = {
 			isa = PBXGroup;
 			children = (
 				9DCE69FC2DBFD50900A76B23 /* GoogleMaps3DDemo.app */,
+				EF6F2E7D27D747548161C166 /* GoogleMaps3DDemoTests.xctest */,
+				F0DEDB66DE384C3AB2E43E11 /* GoogleMaps3DDemoUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -103,6 +184,42 @@
 			productReference = 9DCE69FC2DBFD50900A76B23 /* GoogleMaps3DDemo.app */;
 			productType = "com.apple.product-type.application";
 		};
+		FD27CC684FF445BC8FBF2E10 /* GoogleMaps3DDemoTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DDF3E4253CCE41E49E80B19A /* Build configuration list for PBXNativeTarget "GoogleMaps3DDemoTests" */;
+			buildPhases = (
+				AC536E04021A40528FCBAF3B /* Sources */,
+				8D8DF3C08E91437FAACB889B /* Frameworks */,
+				95B5959FA44C47179784BE19 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				BCFE2C2E444544C59B223913 /* PBXTargetDependency */,
+			);
+			name = GoogleMaps3DDemoTests;
+			productName = GoogleMaps3DDemoTests;
+			productReference = EF6F2E7D27D747548161C166 /* GoogleMaps3DDemoTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		6E92B0BBE6674640A0F1DC0E /* GoogleMaps3DDemoUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2D8ACB8D32C244E29EB11668 /* Build configuration list for PBXNativeTarget "GoogleMaps3DDemoUITests" */;
+			buildPhases = (
+				6F5E825D1F184207885B9E9D /* Sources */,
+				0F39CC7E760B41F7A5E5AD92 /* Frameworks */,
+				59780BA4F435494C942D5C6F /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				E32F1AEE4A6647F7A2E66DB1 /* PBXTargetDependency */,
+			);
+			name = GoogleMaps3DDemoUITests;
+			productName = GoogleMaps3DDemoUITests;
+			productReference = F0DEDB66DE384C3AB2E43E11 /* GoogleMaps3DDemoUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -114,6 +231,12 @@
 				LastUpgradeCheck = 1600;
 				TargetAttributes = {
 					9DCE69FB2DBFD50900A76B23 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+					FD27CC684FF445BC8FBF2E10 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+					6E92B0BBE6674640A0F1DC0E = {
 						CreatedOnToolsVersion = 16.0;
 					};
 				};
@@ -136,12 +259,29 @@
 			projectRoot = "";
 			targets = (
 				9DCE69FB2DBFD50900A76B23 /* GoogleMaps3DDemo */,
+				FD27CC684FF445BC8FBF2E10 /* GoogleMaps3DDemoTests */,
+				6E92B0BBE6674640A0F1DC0E /* GoogleMaps3DDemoUITests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		9DCE69FA2DBFD50900A76B23 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		95B5959FA44C47179784BE19 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5B6C2C1E50B044168ECCF3EF /* flightpath_test.json in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		59780BA4F435494C942D5C6F /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -158,7 +298,41 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AC536E04021A40528FCBAF3B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				EFC85924B11348DB994674BE /* ABLineTests.swift in Sources */,
+				A09537AE8FDC4843BD537F16 /* WorkPointCalculatorTests.swift in Sources */,
+				61A468EE753F4ED2949E7191 /* VehicleConfigurationTests.swift in Sources */,
+				4BC544D7A43442A1A31AE687 /* FlightDataLoaderTests.swift in Sources */,
+				FA65E5CA44BC405C8316AAF4 /* FlightPathServiceTests.swift in Sources */,
+				705236C9F42343F8B0342B61 /* DatabaseManagerTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6F5E825D1F184207885B9E9D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FE2AA3D340CC45F1BF0C4539 /* GoogleMaps3DDemoUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		BCFE2C2E444544C59B223913 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 9DCE69FB2DBFD50900A76B23 /* GoogleMaps3DDemo */;
+			targetProxy = 6B6F6AFD6D5A4BAEB8060BCC /* PBXContainerItemProxy */;
+		};
+		E32F1AEE4A6647F7A2E66DB1 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 9DCE69FB2DBFD50900A76B23 /* GoogleMaps3DDemo */;
+			targetProxy = 182F3BA6D6FD497FA9D84FDA /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		9DCE6A082DBFD50B00A76B23 /* Debug */ = {
@@ -340,6 +514,80 @@
 			};
 			name = Release;
 		};
+		114FE8100126406B8BD430FB /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.GoogleMaps3DDemo.GoogleMaps3DDemoTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/GoogleMaps3DDemo.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/GoogleMaps3DDemo";
+			};
+			name = Debug;
+		};
+		BE3674AD90384517BCAC2CDE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.GoogleMaps3DDemo.GoogleMaps3DDemoTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/GoogleMaps3DDemo.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/GoogleMaps3DDemo";
+			};
+			name = Release;
+		};
+		99A524B156BB4E7298A99CB0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.GoogleMaps3DDemo.GoogleMaps3DDemoUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = GoogleMaps3DDemo;
+			};
+			name = Debug;
+		};
+		8D02EFC079194C1BA9CE8328 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.GoogleMaps3DDemo.GoogleMaps3DDemoUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = GoogleMaps3DDemo;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -357,6 +605,24 @@
 			buildConfigurations = (
 				9DCE6A0B2DBFD50B00A76B23 /* Debug */,
 				9DCE6A0C2DBFD50B00A76B23 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		DDF3E4253CCE41E49E80B19A /* Build configuration list for PBXNativeTarget "GoogleMaps3DDemoTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				114FE8100126406B8BD430FB /* Debug */,
+				BE3674AD90384517BCAC2CDE /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		2D8ACB8D32C244E29EB11668 /* Build configuration list for PBXNativeTarget "GoogleMaps3DDemoUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				99A524B156BB4E7298A99CB0 /* Debug */,
+				8D02EFC079194C1BA9CE8328 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

@@ -26,8 +26,9 @@ final class DatabaseManager {
 
     private var db: OpaquePointer?
     private let dbQueue = DispatchQueue(label: "com.gnss.database", qos: .userInitiated)
+    private let dbPath: String
 
-    private var dbPath: String {
+    static func defaultDatabasePath() -> String {
         let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         return documentsPath.appendingPathComponent("gnss_data.sqlite").path
     }
@@ -35,6 +36,13 @@ final class DatabaseManager {
     // MARK: - Initialization
 
     private init() {
+        self.dbPath = DatabaseManager.defaultDatabasePath()
+        openDatabase()
+        createTables()
+    }
+
+    init(path: String) {
+        self.dbPath = path
         openDatabase()
         createTables()
     }
