@@ -262,7 +262,8 @@ class AgGuidanceScene: SCNScene {
         let spacing = max(state.guidanceSpacing, 0.1)
         let key = (x: Int(floor(centerX / spacing)), z: Int(floor(centerZ / spacing)))
         let activeLine = state.currentLineIndex
-        let shouldRefresh = key != lastGuidanceCenterKey || activeLine != lastGuidanceLineIndex
+        let keyChanged = lastGuidanceCenterKey.map { $0.x != key.x || $0.z != key.z } ?? true
+        let shouldRefresh = keyChanged || activeLine != lastGuidanceLineIndex
         if shouldRefresh {
             lastGuidanceCenterKey = key
             lastGuidanceLineIndex = activeLine
@@ -275,7 +276,8 @@ class AgGuidanceScene: SCNScene {
         let cellSize = max(state.cellSize, 0.1)
         let key = (row: Int(floor(centerZ / cellSize)), col: Int(floor(centerX / cellSize)))
         let generation = state.coverageGeneration
-        let shouldRefresh = key != lastCoverageCenterKey || generation != lastCoverageGeneration
+        let keyChanged = lastCoverageCenterKey.map { $0.row != key.row || $0.col != key.col } ?? true
+        let shouldRefresh = keyChanged || generation != lastCoverageGeneration
         if shouldRefresh {
             lastCoverageCenterKey = key
             lastCoverageGeneration = generation
