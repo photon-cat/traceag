@@ -38,6 +38,10 @@ class AgGuidanceScene: SCNScene {
     // MARK: - Tile Management
     private var loadedTiles: [String: SCNNode] = [:]  // "row_col" -> node
     private var currentBackgroundMode: BackgroundMode = .checkerboard
+    private var lastGuidanceCenterKey: (x: Int, z: Int)?
+    private var lastGuidanceLineIndex: Int?
+    private var lastCoverageCenterKey: (row: Int, col: Int)?
+    private var lastCoverageGeneration: Int = -1
 
     // MARK: - Materials
     private var checkerboardMaterial: SCNMaterial!
@@ -244,11 +248,39 @@ class AgGuidanceScene: SCNScene {
             unloadTile(key: key)
         }
 
-        // Update guidance lines
-        updateGuidanceLines(centerX: centerX, centerZ: centerZ, renderDistance: renderDistance)
+        if shouldRefreshGuidance(centerX: centerX, centerZ: centerZ) {
+            updateGuidanceLines(centerX: centerX, centerZ: centerZ, renderDistance: renderDistance)
+        }
 
-        // Update coverage visualization
-        updateCoverageVisualization(centerX: centerX, centerZ: centerZ, renderDistance: renderDistance)
+        if shouldRefreshCoverage(centerX: centerX, centerZ: centerZ, renderDistance: renderDistance) {
+            updateCoverageVisualization(centerX: centerX, centerZ: centerZ, renderDistance: renderDistance)
+        }
+    }
+
+    private func shouldRefreshGuidance(centerX: Double, centerZ: Double) -> Bool {
+        guard let state = state else { return false }
+        let spacing = max(state.guidanceSpacing, 0.1)
+        let key = (x: Int(floor(centerX / spacing)), z: Int(floor(centerZ / spacing)))
+        let activeLine = state.currentLineIndex
+        let shouldRefresh = key != lastGuidanceCenterKey || activeLine != lastGuidanceLineIndex
+        if shouldRefresh {
+            lastGuidanceCenterKey = key
+            lastGuidanceLineIndex = activeLine
+        }
+        return shouldRefresh
+    }
+
+    private func shouldRefreshCoverage(centerX: Double, centerZ: Double, renderDistance: Double) -> Bool {
+        guard let state = state else { return false }
+        let cellSize = max(state.cellSize, 0.1)
+        let key = (row: Int(floor(centerZ / cellSize)), col: Int(floor(centerX / cellSize)))
+        let generation = state.coverageGeneration
+        let shouldRefresh = key != lastCoverageCenterKey || generation != lastCoverageGeneration
+        if shouldRefresh {
+            lastCoverageCenterKey = key
+            lastCoverageGeneration = generation
+        }
+        return shouldRefresh
     }
 
     private func loadTile(x: Int, z: Int) {

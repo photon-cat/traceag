@@ -786,6 +786,31 @@ final class DatabaseManager {
         }
     }
 
+    func updateTaskGuidanceLink(id: String, guidanceLineId: String?, headlandId: String?) {
+        dbQueue.sync {
+            let sql = "UPDATE tasks SET guidance_line_id = ?, headland_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+            var stmt: OpaquePointer?
+            if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+                if let guidanceLineId {
+                    sqlite3_bind_text(stmt, 1, (guidanceLineId as NSString).utf8String, -1, nil)
+                } else {
+                    sqlite3_bind_null(stmt, 1)
+                }
+                if let headlandId {
+                    sqlite3_bind_text(stmt, 2, (headlandId as NSString).utf8String, -1, nil)
+                } else {
+                    sqlite3_bind_null(stmt, 2)
+                }
+                sqlite3_bind_text(stmt, 3, (id as NSString).utf8String, -1, nil)
+
+                if sqlite3_step(stmt) != SQLITE_DONE {
+                    print("DatabaseManager: Error updating task guidance link")
+                }
+            }
+            sqlite3_finalize(stmt)
+        }
+    }
+
     // MARK: - Task Log Operations
 
     func addTaskLog(taskId: String, latitude: Double, longitude: Double, heading: Double?, speed: Double?, data: [String: Any]? = nil) {
@@ -845,6 +870,30 @@ final class DatabaseManager {
                 sqlite3_step(stmt)
             }
             sqlite3_finalize(stmt)
+        }
+    }
+
+    func addCoverageCells(taskId: String, cells: [(row: Int, col: Int)]) {
+        guard !cells.isEmpty else { return }
+        dbQueue.sync {
+            executeSQL("BEGIN TRANSACTION")
+            let sql = "INSERT OR IGNORE INTO coverage_data (task_id, cell_row, cell_col, timestamp) VALUES (?, ?, ?, ?)"
+            var stmt: OpaquePointer?
+
+            if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+                let timestamp = ISO8601DateFormatter().string(from: Date())
+                for cell in cells {
+                    sqlite3_bind_text(stmt, 1, (taskId as NSString).utf8String, -1, nil)
+                    sqlite3_bind_int(stmt, 2, Int32(cell.row))
+                    sqlite3_bind_int(stmt, 3, Int32(cell.col))
+                    sqlite3_bind_text(stmt, 4, (timestamp as NSString).utf8String, -1, nil)
+
+                    sqlite3_step(stmt)
+                    sqlite3_reset(stmt)
+                }
+            }
+            sqlite3_finalize(stmt)
+            executeSQL("COMMIT")
         }
     }
 
@@ -968,6 +1017,43 @@ final class DatabaseManager {
             sqlite3_finalize(stmt)
         }
         return lines
+    }
+
+    func getGuidanceLine(id: String) -> ISOGuidanceLine? {
+        var line: ISOGuidanceLine?
+        dbQueue.sync {
+            let sql = "SELECT id, partfield_id, type, points_json, spacing_m, heading_deg FROM guidance_lines WHERE id = ? LIMIT 1"
+            var stmt: OpaquePointer?
+
+            if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+                sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, nil)
+                if sqlite3_step(stmt) == SQLITE_ROW {
+                    let id = String(cString: sqlite3_column_text(stmt, 0))
+                    let pId = String(cString: sqlite3_column_text(stmt, 1))
+                    let typeStr = String(cString: sqlite3_column_text(stmt, 2))
+                    let spacing = sqlite3_column_double(stmt, 4)
+                    let heading = sqlite3_column_type(stmt, 5) != SQLITE_NULL ? sqlite3_column_double(stmt, 5) : nil
+
+                    var points: [GuidancePoint] = []
+                    if let jsonStr = sqlite3_column_text(stmt, 3).map({ String(cString: $0) }),
+                       let jsonData = jsonStr.data(using: .utf8),
+                       let decoded = try? JSONDecoder().decode([GuidancePoint].self, from: jsonData) {
+                        points = decoded
+                    }
+
+                    line = ISOGuidanceLine(
+                        id: id,
+                        partfieldId: pId,
+                        type: GuidanceLineType(rawValue: typeStr) ?? .straightAB,
+                        points: points,
+                        spacingM: spacing,
+                        headingDeg: heading
+                    )
+                }
+            }
+            sqlite3_finalize(stmt)
+        }
+        return line
     }
 
     // MARK: - Headland Operations

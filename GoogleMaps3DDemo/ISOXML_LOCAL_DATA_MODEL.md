@@ -123,6 +123,7 @@ This document proposes an ISOXML-aligned local schema, storage choice, and impor
 - **Schema constraints**: Use foreign keys for Partfield → Boundary, Task → GuidanceLine/Headland.
 - **Geometry validation**: Validate polygon closure and minimum points before persisting.
 - **IdTable parity**: Maintain ISOXML ID prefixes (PFD/TSK/DVC/GLN/HLD) for export.
+- **WGS84 alignment**: Use WGS84 ellipsoid formulas for all local ↔ latitude/longitude conversions.
 
 ---
 
@@ -213,4 +214,3 @@ CREATE INDEX idx_tasklog_task_timestamp ON task_logs(task_id, timestamp);
 2. Add import/export layer (TaskData.xml parsing + serialization).
 3. Add migration scaffolding in `DatabaseManager`.
 4. Wire guidance state to active task + guidance line references.
-

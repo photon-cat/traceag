@@ -168,15 +168,11 @@ final class FieldTaskManager: ObservableObject {
         boundaryPoints: [(x: Float, z: Float)],
         originCoordinate: CLLocationCoordinate2D
     ) -> ISOPartfield? {
-        // Convert local coordinates to WGS84
-        let metersPerDegreeLat = 111132.0
-        let metersPerDegreeLon = 111132.0 * cos(originCoordinate.latitude * .pi / 180)
-
+        // Convert local coordinates to WGS84 (WGS84 ellipsoid)
+        let converter = WGS84Converter(origin: originCoordinate)
         let boundary = boundaryPoints.map { point in
-            BoundaryPoint(
-                latitude: originCoordinate.latitude + Double(point.z) / metersPerDegreeLat,
-                longitude: originCoordinate.longitude + Double(point.x) / metersPerDegreeLon
-            )
+            let coordinate = converter.localToWGS84(x: Double(point.x), z: Double(point.z))
+            return BoundaryPoint(coordinate: coordinate)
         }
 
         return createPartfield(name: name, season: season, cropType: cropType, boundary: boundary)
@@ -267,6 +263,7 @@ final class FieldTaskManager: ObservableObject {
         let headingDeg = abLine.heading * 180 / .pi
         if let line = db.createGuidanceLine(partfieldId: partfieldId, type: .straightAB, points: points, spacing: spacing, headingDeg: headingDeg) {
             guidanceLines.insert(line, at: 0)
+            updateGuidanceLinkForActiveTask(guidanceLineId: line.id)
             return line
         }
         return nil
@@ -276,6 +273,7 @@ final class FieldTaskManager: ObservableObject {
         guard let partfieldId = selectedPartfield?.id else { return nil }
         if let line = db.createGuidanceLine(partfieldId: partfieldId, type: .curvedAB, points: points, spacing: spacing) {
             guidanceLines.insert(line, at: 0)
+            updateGuidanceLinkForActiveTask(guidanceLineId: line.id)
             return line
         }
         return nil
@@ -285,9 +283,32 @@ final class FieldTaskManager: ObservableObject {
         guard let partfieldId = selectedPartfield?.id else { return nil }
         if let headland = db.createHeadland(partfieldId: partfieldId, boundary: boundary, offsetM: offsetM) {
             headlands.insert(headland, at: 0)
+            updateGuidanceLinkForActiveTask(headlandId: headland.id)
             return headland
         }
         return nil
+    }
+
+    func guidanceLine(for task: ISOTask?) -> ISOGuidanceLine? {
+        guard let guidanceLineId = task?.guidanceLineId else { return nil }
+        return db.getGuidanceLine(id: guidanceLineId)
+    }
+
+    func updateGuidanceLinkForActiveTask(guidanceLineId: String? = nil, headlandId: String? = nil) {
+        guard let task = activeTask else { return }
+        db.updateTaskGuidanceLink(id: task.id, guidanceLineId: guidanceLineId ?? task.guidanceLineId, headlandId: headlandId ?? task.headlandId)
+
+        if let index = tasks.firstIndex(where: { $0.id == task.id }) {
+            var updated = tasks[index]
+            if let guidanceLineId {
+                updated.guidanceLineId = guidanceLineId
+            }
+            if let headlandId {
+                updated.headlandId = headlandId
+            }
+            tasks[index] = updated
+            activeTask = updated
+        }
     }
 
     func startTask(_ task: ISOTask) {
@@ -386,6 +407,11 @@ final class FieldTaskManager: ObservableObject {
     func recordCoverage(row: Int, col: Int) {
         guard let taskId = activeTask?.id else { return }
         db.addCoverageCell(taskId: taskId, row: row, col: col)
+    }
+
+    func recordCoverage(cells: [(row: Int, col: Int)]) {
+        guard let taskId = activeTask?.id else { return }
+        db.addCoverageCells(taskId: taskId, cells: cells)
     }
 
     /// Gets coverage cells for a task

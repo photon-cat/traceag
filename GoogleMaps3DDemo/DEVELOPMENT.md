@@ -2,32 +2,35 @@
 
 ## Project Overview
 
-Agricultural guidance application built on iOS with SceneKit for visualization. Provides AB line guidance, coverage tracking, and field management capabilities.
+Agricultural guidance application built on iOS with SceneKit for visualization. Provides AB line guidance, coverage tracking, field management, and ISOXML-aligned persistence using WGS84 coordinates.
 
 ## Architecture
 
 ```
 GoogleMaps3DDemo/
 ├── AgGuidanceDemo.swift      # Main SwiftUI view
-├── AgGuidanceState.swift     # App state management
+├── AgGuidanceState.swift     # App state management + persistence bridge
 ├── AgGuidanceScene.swift     # SceneKit 3D rendering
 ├── AgGuidanceSettings.swift  # Settings UI
 ├── Guidance/
 │   ├── GuidanceEngine.swift  # Guidance protocols & types
 │   ├── ABLine.swift          # Straight AB line guidance
-│   └── PositionSource.swift  # Position input abstraction
-├── Data/                     # (Planned) Database layer
-│   ├── Models/
-│   ├── Repositories/
-│   └── Database.swift
+│   ├── PositionSource.swift  # Position input abstraction
+│   └── WGS84Converter.swift  # WGS84 tangent-plane conversion
+├── Database/                 # SQLite ISOXML-aligned persistence
+│   ├── DatabaseManager.swift
+│   ├── FieldTaskManager.swift
+│   └── ISOXMLModels.swift
 └── Info.plist
 ```
 
 ## Current Features
 
 - [x] Straight AB line guidance with A/B point setting
+- [x] ISOXML-aligned persistence for fields, tasks, guidance lines, and coverage
+- [x] WGS84 coordinate conversion for guidance + storage parity
 - [x] Infinite tile streaming world
-- [x] Coverage tracking visualization
+- [x] Coverage tracking visualization (batched persistence)
 - [x] Cross-track error indicator
 - [x] 3D perspective and 2D top-down views
 - [x] Auto-follow and manual steering modes
@@ -44,8 +47,9 @@ GoogleMaps3DDemo/
 - [ ] Boundary definition
 
 ### Phase 2: Data Persistence
-- [ ] SwiftData/CoreData integration
-- [ ] Field definitions with boundaries
+- [x] SQLite ISOXML-aligned persistence
+- [x] Field definitions with boundaries
+- [x] Guidance line persistence + task linkage
 - [ ] Equipment profiles
 - [ ] Chemical/product records
 - [ ] Application records
