@@ -89,7 +89,9 @@ struct AgGuidanceDemo: View {
             AgGuidanceSettings(state: state)
         }
         .sheet(isPresented: $showFieldTaskView) {
-            FieldTaskView()
+            NavigationStack {
+                FieldTaskView(showsDoneButton: true)
+            }
         }
         .navigationBarHidden(true)
     }

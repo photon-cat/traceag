@@ -24,42 +24,57 @@ struct FieldTaskView: View {
     @State private var showNewFieldSheet = false
     @State private var showNewTaskSheet = false
 
+    private let showsDoneButton: Bool
+
+    init(showsDoneButton: Bool = false) {
+        self.showsDoneButton = showsDoneButton
+    }
+
     var body: some View {
-        NavigationView {
-            List {
-                // Farm Section
-                Section(header: Text("Farm")) {
+        List {
+            Section {
+                VStack(alignment: .leading, spacing: 12) {
+                    FieldBeeSectionHeader("Farm", subtitle: "Set the primary operation.")
                     if let farm = manager.selectedFarm {
-                        HStack {
+                        HStack(spacing: 12) {
                             Image(systemName: "house.fill")
-                                .foregroundColor(.brown)
-                            Text(farm.name)
-                                .font(.headline)
+                                .foregroundColor(FieldBeeColor.soil)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(farm.name)
+                                    .font(.headline)
+                                Text("\(manager.partfields.count) fields")
+                                    .font(.caption)
+                                    .foregroundColor(FieldBeeColor.slate)
+                            }
                             Spacer()
-                            Text("\(manager.partfields.count) fields")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                            FieldBeePill(text: "Active", color: FieldBeeColor.leaf)
                         }
                     } else {
                         Button(action: { showNewFarmSheet = true }) {
-                            Label("Create Farm", systemImage: "plus.circle")
+                            Label("Create Farm", systemImage: "plus.circle.fill")
                         }
+                        .buttonStyle(.borderedProminent)
+                        .tint(FieldBeeColor.leaf)
                     }
                 }
+                .listRowBackground(FieldBeeColor.panel)
+            }
 
-                // Fields Section
-                Section(header: HStack {
-                    Text("Fields")
-                    Spacer()
-                    Button(action: { showNewFieldSheet = true }) {
-                        Image(systemName: "plus.circle.fill")
-                            .foregroundColor(.green)
+            Section {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        FieldBeeSectionHeader("Fields", subtitle: "Select a field to manage tasks.")
+                        Spacer()
+                        Button(action: { showNewFieldSheet = true }) {
+                            Image(systemName: "plus.circle.fill")
+                        }
+                        .tint(FieldBeeColor.leaf)
+                        .disabled(manager.selectedFarm == nil)
                     }
-                    .disabled(manager.selectedFarm == nil)
-                }) {
+
                     if manager.partfields.isEmpty {
                         Text("No fields yet")
-                            .foregroundColor(.secondary)
+                            .foregroundColor(FieldBeeColor.slate)
                             .italic()
                     } else {
                         ForEach(manager.partfields) { field in
@@ -72,20 +87,24 @@ struct FieldTaskView: View {
                         .onDelete(perform: deleteFields)
                     }
                 }
+                .listRowBackground(FieldBeeColor.panel)
+            }
 
-                // Tasks Section (only show if field selected)
-                if let selectedField = manager.selectedPartfield {
-                    Section(header: HStack {
-                        Text("Tasks for \(selectedField.name)")
-                        Spacer()
-                        Button(action: { showNewTaskSheet = true }) {
-                            Image(systemName: "plus.circle.fill")
-                                .foregroundColor(.blue)
+            if let selectedField = manager.selectedPartfield {
+                Section {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            FieldBeeSectionHeader("Tasks", subtitle: "Planned work for \(selectedField.name).")
+                            Spacer()
+                            Button(action: { showNewTaskSheet = true }) {
+                                Image(systemName: "plus.circle.fill")
+                            }
+                            .tint(FieldBeeColor.leaf)
                         }
-                    }) {
+
                         if manager.tasks.isEmpty {
                             Text("No tasks yet")
-                                .foregroundColor(.secondary)
+                                .foregroundColor(FieldBeeColor.slate)
                                 .italic()
                         } else {
                             ForEach(manager.tasks) { task in
@@ -97,14 +116,14 @@ struct FieldTaskView: View {
                                             } label: {
                                                 Label("Start", systemImage: "play.fill")
                                             }
-                                            .tint(.green)
+                                            .tint(FieldBeeColor.leaf)
                                         } else if task.status == .inProgress {
                                             Button {
                                                 manager.pauseTask(task)
                                             } label: {
                                                 Label("Pause", systemImage: "pause.fill")
                                             }
-                                            .tint(.orange)
+                                            .tint(FieldBeeColor.sun)
                                         }
                                     }
                                     .swipeActions(edge: .trailing) {
@@ -114,41 +133,49 @@ struct FieldTaskView: View {
                                             } label: {
                                                 Label("Complete", systemImage: "checkmark")
                                             }
-                                            .tint(.blue)
+                                            .tint(FieldBeeColor.soil)
                                         }
                                     }
                             }
                             .onDelete(perform: deleteTasks)
                         }
                     }
-                }
-
-                // Active Task Summary
-                if let activeTask = manager.activeTask {
-                    Section(header: Text("Active Task")) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Image(systemName: activeTask.taskType.systemImage)
-                                    .foregroundColor(.blue)
-                                Text(activeTask.name)
-                                    .font(.headline)
-                            }
-                            Text("Status: In Progress")
-                                .font(.caption)
-                                .foregroundColor(.green)
-                            if let coverage = getCoverageForActiveTask() {
-                                Text("Coverage: \(coverage) cells")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                        .padding(.vertical, 4)
-                    }
+                    .listRowBackground(FieldBeeColor.panel)
                 }
             }
-            .navigationTitle("Fields & Tasks")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
+
+            if let activeTask = manager.activeTask {
+                Section {
+                    VStack(alignment: .leading, spacing: 12) {
+                        FieldBeeSectionHeader("Active Task", subtitle: "Current in-field execution.")
+                        HStack(spacing: 12) {
+                            Image(systemName: activeTask.taskType.systemImage)
+                                .foregroundColor(FieldBeeColor.leaf)
+                                .font(.title2)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(activeTask.name)
+                                    .font(.headline)
+                                Text("Status: \(activeTask.status.displayName)")
+                                    .font(.caption)
+                                    .foregroundColor(FieldBeeColor.slate)
+                            }
+                            Spacer()
+                            if let coverage = getCoverageForActiveTask() {
+                                FieldBeePill(text: "\(coverage) cells", color: FieldBeeColor.soil)
+                            }
+                        }
+                    }
+                    .listRowBackground(FieldBeeColor.panel)
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .background(FieldBeeColor.mist)
+        .navigationTitle("Fields & Tasks")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if showsDoneButton {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Done") {
                         dismiss()
@@ -194,31 +221,31 @@ struct FieldRow: View {
     var body: some View {
         HStack {
             Image(systemName: "square.dashed")
-                .foregroundColor(isSelected ? .green : .gray)
+                .foregroundColor(isSelected ? FieldBeeColor.leaf : FieldBeeColor.slate)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(field.name)
                     .font(.subheadline.bold())
-                    .foregroundColor(isSelected ? .green : .primary)
+                    .foregroundColor(isSelected ? FieldBeeColor.leaf : FieldBeeColor.ink)
 
                 HStack(spacing: 8) {
                     if let season = field.season {
                         Text(season)
                             .font(.caption2)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(FieldBeeColor.slate)
                     }
                     if let crop = field.cropType {
                         Text(crop)
                             .font(.caption2)
                             .padding(.horizontal, 4)
                             .padding(.vertical, 1)
-                            .background(Color.green.opacity(0.2))
+                            .background(FieldBeeColor.leaf.opacity(0.18))
                             .cornerRadius(4)
                     }
                     if let area = field.areaHectares {
                         Text(String(format: "%.2f ha", area))
                             .font(.caption2)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(FieldBeeColor.slate)
                     }
                 }
             }
@@ -227,7 +254,7 @@ struct FieldRow: View {
 
             if isSelected {
                 Image(systemName: "checkmark.circle.fill")
-                    .foregroundColor(.green)
+                    .foregroundColor(FieldBeeColor.leaf)
             }
         }
         .padding(.vertical, 4)
@@ -249,12 +276,12 @@ struct TaskRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(task.name)
                     .font(.subheadline)
-                    .foregroundColor(isActive ? .blue : .primary)
+                    .foregroundColor(isActive ? FieldBeeColor.leaf : FieldBeeColor.ink)
 
                 HStack(spacing: 8) {
                     Text(task.taskType.displayName)
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(FieldBeeColor.slate)
 
                     StatusBadge(status: task.status)
                 }
@@ -264,7 +291,7 @@ struct TaskRow: View {
 
             if isActive {
                 Image(systemName: "bolt.fill")
-                    .foregroundColor(.blue)
+                    .foregroundColor(FieldBeeColor.leaf)
             }
         }
         .padding(.vertical, 4)
@@ -272,10 +299,10 @@ struct TaskRow: View {
 
     private var statusColor: Color {
         switch task.status {
-        case .pending: return .gray
-        case .inProgress: return .blue
-        case .paused: return .orange
-        case .completed: return .green
+        case .pending: return FieldBeeColor.slate
+        case .inProgress: return FieldBeeColor.leaf
+        case .paused: return FieldBeeColor.sun
+        case .completed: return FieldBeeColor.soil
         case .cancelled: return .red
         }
     }
@@ -298,10 +325,10 @@ struct StatusBadge: View {
 
     private var backgroundColor: Color {
         switch status {
-        case .pending: return .gray
-        case .inProgress: return .blue
-        case .paused: return .orange
-        case .completed: return .green
+        case .pending: return FieldBeeColor.slate
+        case .inProgress: return FieldBeeColor.leaf
+        case .paused: return FieldBeeColor.sun
+        case .completed: return FieldBeeColor.soil
         case .cancelled: return .red
         }
     }
@@ -470,5 +497,7 @@ struct NewTaskSheet: View {
 }
 
 #Preview {
-    FieldTaskView()
+    NavigationStack {
+        FieldTaskView()
+    }
 }
