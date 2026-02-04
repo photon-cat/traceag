@@ -121,6 +121,11 @@ class AgGuidanceState: ObservableObject {
 
     @Published var implementWidth: Double = 6.0
 
+    // MARK: - ISOXML Persistence
+
+    private let fieldTaskManager = FieldTaskManager.shared
+    private var fieldTaskCancellables = Set<AnyCancellable>()
+
     // MARK: - Vehicle Configuration
 
     @Published var vehicleConfig: VehicleConfiguration = VehicleConfiguration() {
@@ -190,6 +195,10 @@ class AgGuidanceState: ObservableObject {
 
     var coveredCells: Set<String> = []
     let cellSize: Double = 1.0
+    @Published private(set) var coverageGeneration: Int = 0
+
+    private var lastCoverageTaskId: String?
+    private var lastPositionLogTime: CFTimeInterval = 0
 
     // MARK: - Scene Reference
 
@@ -264,6 +273,72 @@ class AgGuidanceState: ObservableObject {
         self.positionSource = simulator
 
         setupPositionSubscription()
+        setupFieldTaskBindings()
+    }
+
+    // MARK: - Field/Task Integration
+
+    private func setupFieldTaskBindings() {
+        fieldTaskManager.$activeTask
+            .combineLatest(fieldTaskManager.$selectedPartfield)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] task, partfield in
+                self?.syncGuidancePersistence(task: task, partfield: partfield)
+            }
+            .store(in: &fieldTaskCancellables)
+    }
+
+    private func syncGuidancePersistence(task: ISOTask?, partfield: ISOPartfield?) {
+        let guidanceLine = fieldTaskManager.guidanceLine(for: task) ?? fieldTaskManager.guidanceLines.first
+
+        if let line = guidanceLine, line.points.count >= 2 {
+            let a = line.points.first!.coordinate
+            let b = line.points.last!.coordinate
+            let restored = ABLine(pointA: a, pointB: b)
+            abLine = restored
+            guidanceSpacing = line.spacingM
+            guidanceEngine = StraightABGuidance(
+                abLine: restored,
+                lineSpacing: guidanceSpacing,
+                linesDirection: linesDirection
+            )
+            abPointState = .complete
+        } else {
+            abLine = nil
+            guidanceEngine = nil
+            abPointState = .none
+        }
+
+        let origin = abLine?.pointA ?? partfield?.boundary?.first?.coordinate ?? simulatorInitialCoordinate
+        if origin.latitude != simulatorInitialCoordinate.latitude || origin.longitude != simulatorInitialCoordinate.longitude {
+            simulatorInitialCoordinate = origin
+            if let sim = positionSource as? SimulatorPositionSource {
+                sim.initialCoordinate = origin
+            }
+        }
+
+        if let boundary = partfield?.boundary, !boundary.isEmpty {
+            let converter = WGS84Converter(origin: origin)
+            boundaryPoints = boundary.map { point in
+                let local = converter.wgs84ToLocal(point.coordinate)
+                return (x: Float(local.x), z: Float(local.z))
+            }
+            scene?.updateBoundary(points: boundaryPoints)
+        } else {
+            boundaryPoints.removeAll()
+            scene?.clearBoundary()
+        }
+
+        if let taskId = task?.id, taskId != lastCoverageTaskId {
+            coveredCells = fieldTaskManager.getCoverageCells(taskId: taskId)
+            coverageGeneration &+= 1
+            lastCoverageTaskId = taskId
+        } else if task == nil {
+            coveredCells.removeAll()
+            coverageGeneration &+= 1
+            lastCoverageTaskId = nil
+        }
+
     }
 
     // MARK: - Position Source Management
@@ -394,11 +469,10 @@ class AgGuidanceState: ObservableObject {
             }
         } else {
             // No AB line yet - use position relative to initial coordinate
-            let metersPerDegreeLat = 111132.0
-            let metersPerDegreeLon = 111132.0 * cos(simulatorInitialCoordinate.latitude * .pi / 180)
-
-            vehicleLocalX = (update.coordinate.longitude - simulatorInitialCoordinate.longitude) * metersPerDegreeLon
-            vehicleLocalZ = (update.coordinate.latitude - simulatorInitialCoordinate.latitude) * metersPerDegreeLat
+            let converter = WGS84Converter(origin: simulatorInitialCoordinate)
+            let local = converter.wgs84ToLocal(update.coordinate)
+            vehicleLocalX = local.x
+            vehicleLocalZ = local.z
 
             // Work point without AB line - just offset from antenna
             let workPoint = workPointCalculator.calculateWorkPoint(
@@ -410,6 +484,29 @@ class AgGuidanceState: ObservableObject {
             workPointZ = workPoint.z
             workPointHeading = workPoint.heading
         }
+
+        logPositionIfNeeded(update)
+    }
+
+    private func logPositionIfNeeded(_ update: PositionUpdate) {
+        guard fieldTaskManager.activeTask != nil else { return }
+        let now = CACurrentMediaTime()
+        if now - lastPositionLogTime < 1.0 {
+            return
+        }
+        lastPositionLogTime = now
+        fieldTaskManager.logPosition(
+            latitude: update.coordinate.latitude,
+            longitude: update.coordinate.longitude,
+            heading: update.heading,
+            speed: update.speed,
+            additionalData: [
+                "work_point_x": workPointX,
+                "work_point_z": workPointZ,
+                "cross_track_error": crossTrackError,
+                "line_index": currentLineIndex
+            ]
+        )
     }
 
     // MARK: - Simulation Control
@@ -511,6 +608,7 @@ class AgGuidanceState: ObservableObject {
         let perpZ = -sin(workPointHeading)
 
         let step = cellSize / 2
+        var newCells: [(row: Int, col: Int)] = []
         var offset = -halfWidth
         while offset <= halfWidth {
             let sampleX = workPointX + offset * perpX
@@ -518,9 +616,16 @@ class AgGuidanceState: ObservableObject {
 
             let col = Int(floor(sampleX / cellSize))
             let row = Int(floor(sampleZ / cellSize))
-
-            coveredCells.insert("\(row)_\(col)")
+            let key = "\(row)_\(col)"
+            if coveredCells.insert(key).inserted {
+                newCells.append((row: row, col: col))
+            }
             offset += step
+        }
+
+        if !newCells.isEmpty {
+            coverageGeneration &+= 1
+            fieldTaskManager.recordCoverage(cells: newCells)
         }
     }
 
@@ -607,6 +712,7 @@ class AgGuidanceState: ObservableObject {
     func clearCoverage() {
         coveredCells.removeAll()
         coveragePercent = 0
+        coverageGeneration &+= 1
     }
 
     // MARK: - Field Boundary

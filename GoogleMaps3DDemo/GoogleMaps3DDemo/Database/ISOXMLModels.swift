@@ -332,13 +332,12 @@ struct ISOPartfield: Identifiable, Codable, Equatable {
 
         // Convert to local meters (approximate)
         let centerLat = points.map { $0.latitude }.reduce(0, +) / Double(points.count)
-        let metersPerDegreeLat = 111132.0
-        let metersPerDegreeLon = 111132.0 * cos(centerLat * .pi / 180)
+        let meters = WGS84Converter.metersPerDegree(atLatitude: centerLat)
 
         // Convert to meters
         let metersPoints = points.map { p in
-            (x: (p.longitude - points[0].longitude) * metersPerDegreeLon,
-             y: (p.latitude - points[0].latitude) * metersPerDegreeLat)
+            (x: (p.longitude - points[0].longitude) * meters.lon,
+             y: (p.latitude - points[0].latitude) * meters.lat)
         }
 
         // Shoelace formula for polygon area

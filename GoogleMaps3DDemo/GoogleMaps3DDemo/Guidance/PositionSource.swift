@@ -163,13 +163,6 @@ class SimulatorPositionSource: PositionSource {
     #endif
     private var lastUpdateTime: CFTimeInterval = 0
 
-    // MARK: - Coordinate Constants
-
-    private let metersPerDegreeLat: Double = 111132.0
-    private var metersPerDegreeLon: Double {
-        111132.0 * cos(currentCoordinate.latitude * .pi / 180)
-    }
-
     let sourceType: PositionSourceType = .simulator
 
     // MARK: - Initialization
@@ -247,9 +240,10 @@ class SimulatorPositionSource: PositionSource {
         // Move forward
         let distance = speed * deltaTime
 
-        // Convert to coordinate deltas
-        let dLat = distance * cos(currentHeading) / metersPerDegreeLat
-        let dLon = distance * sin(currentHeading) / metersPerDegreeLon
+        // Convert to coordinate deltas using WGS84
+        let meters = WGS84Converter.metersPerDegree(atLatitude: currentCoordinate.latitude)
+        let dLat = distance * cos(currentHeading) / meters.lat
+        let dLon = distance * sin(currentHeading) / meters.lon
 
         currentCoordinate = CLLocationCoordinate2D(
             latitude: currentCoordinate.latitude + dLat,

@@ -106,11 +106,8 @@ class StraightABGuidance: GuidanceEngine {
     /// Reference point for local coordinate conversion (usually A point)
     private let origin: CLLocationCoordinate2D
 
-    /// Meters per degree at origin latitude
-    private let metersPerDegreeLat: Double = 111132.0
-    private var metersPerDegreeLon: Double {
-        111132.0 * cos(origin.latitude * .pi / 180)
-    }
+    /// WGS84 converter for local tangent plane coordinates.
+    private let converter: WGS84Converter
 
     // MARK: - Initialization
 
@@ -119,25 +116,18 @@ class StraightABGuidance: GuidanceEngine {
         self.lineSpacing = lineSpacing
         self.linesDirection = linesDirection
         self.origin = abLine.pointA
+        self.converter = WGS84Converter(origin: abLine.pointA)
     }
 
     // MARK: - Coordinate Conversion
 
     func wgs84ToLocal(_ coord: CLLocationCoordinate2D) -> (x: Double, z: Double) {
-        let dLat = coord.latitude - origin.latitude
-        let dLon = coord.longitude - origin.longitude
-
         // x = East, z = North (matches SceneKit where +Z is forward/North)
-        let x = dLon * metersPerDegreeLon
-        let z = dLat * metersPerDegreeLat
-
-        return (x, z)
+        converter.wgs84ToLocal(coord)
     }
 
     func localToWGS84(x: Double, z: Double) -> CLLocationCoordinate2D {
-        let lat = origin.latitude + z / metersPerDegreeLat
-        let lon = origin.longitude + x / metersPerDegreeLon
-        return CLLocationCoordinate2D(latitude: lat, longitude: lon)
+        converter.localToWGS84(x: x, z: z)
     }
 
     // MARK: - GuidanceEngine Protocol
