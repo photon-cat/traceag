@@ -13,29 +13,31 @@
 
 import Foundation
 
-public class FlightDataLoader : ObservableObject {
+public class FlightDataLoader: ObservableObject {
 
-  @Published var flightPathData: FlightPathData = FlightPathData(flight:[])
+  @Published var flightPathData: FlightPathData = FlightPathData(flight: [])
   @Published var isLoaded: Bool = false
 
-  public init() {
+  private let bundle: Bundle
+
+  public init(bundle: Bundle = .main) {
+    self.bundle = bundle
     load("flightpath.json")
   }
-  
-  public func load(_ path: String) {
-    if let url = Bundle.main.url(forResource: path, withExtension: nil){
-      if let data = try? Data(contentsOf: url){
+
+  public func load(_ path: String, bundle overrideBundle: Bundle? = nil) {
+    let sourceBundle = overrideBundle ?? bundle
+    if let url = sourceBundle.url(forResource: path, withExtension: nil) {
+      if let data = try? Data(contentsOf: url) {
         let jsondecoder = JSONDecoder()
-        do{
+        do {
           let result = try jsondecoder.decode(FlightPathData.self, from: data)
           flightPathData = result
           isLoaded = true
-        }
-        catch {
+        } catch {
           print("Error trying to load or parse the JSON file.")
         }
       }
     }
   }
 }
-

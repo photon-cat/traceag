@@ -1,0 +1,12 @@
+{
+  "flight": [
+    {
+      "timestamp": 1710000000,
+      "latitude": 38.06517,
+      "longitude": -79.05179,
+      "altitude": 125.0,
+      "bearing": 90.0,
+      "speed": 12.3
+    }
+  ]
+}
