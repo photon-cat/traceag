@@ -45,6 +45,12 @@ enum ABPointState: String {
     case complete = "New AB"
 }
 
+enum GuidanceConfidence {
+    case good
+    case degraded
+    case invalid
+}
+
 // MARK: - AgGuidanceState
 
 class AgGuidanceState: ObservableObject {
@@ -53,10 +59,16 @@ class AgGuidanceState: ObservableObject {
     @Published var viewMode: ViewMode = .perspective3D
     @Published var backgroundMode: BackgroundMode = .checkerboard
     @Published var controlMode: ControlMode = .autoFollow
-    @Published var headingMode: HeadingMode = .northUp
+    @Published var headingMode: HeadingMode = .headingUp
     @Published var coveragePercent: Double = 0
     @Published var isRunning: Bool = false
     @Published var implementActive: Bool = true
+    @Published var showDebugMarkers: Bool = false
+    @Published var showHeadingTail: Bool = true
+    @Published var isFreeCamera: Bool = false
+    @Published var cameraZoom: Double = 60
+    @Published var cameraDistance: Double = 32
+    @Published var cameraHeight: Double = 18
 
     // MARK: - Guidance Published Properties
 
@@ -65,6 +77,8 @@ class AgGuidanceState: ObservableObject {
     @Published var alongTrackDistance: Double = 0
     @Published var isPastEndPoint: Bool = false
     @Published var abPointState: ABPointState = .none
+    @Published var headingError: Double = 0
+    @Published var guidanceConfidence: GuidanceConfidence = .invalid
 
     // MARK: - Position Source
 
@@ -84,6 +98,7 @@ class AgGuidanceState: ObservableObject {
     @Published var gnssAccuracy: Double = -1
     @Published var gnssUpdateRate: Double = 0
     @Published var isExternalGNSS: Bool = false
+    @Published var gnssAltitude: Double = 0
 
     // MARK: - Simulator Settings
 
@@ -119,7 +134,13 @@ class AgGuidanceState: ObservableObject {
         }
     }
 
-    @Published var implementWidth: Double = 6.0
+    @Published var implementWidth: Double = 6.0 {
+        didSet {
+            if vehicleConfig.implement.workAreaWidth != implementWidth {
+                vehicleConfig.implement.workAreaWidth = implementWidth
+            }
+        }
+    }
 
     // MARK: - ISOXML Persistence
 
@@ -166,6 +187,8 @@ class AgGuidanceState: ObservableObject {
     @Published var vehicleHeading: Double = 0
     @Published var vehicleSpeed: Double = 0
     @Published var vehicleYawRate: Double = 0
+    @Published var rearAxleX: Double = 0
+    @Published var rearAxleZ: Double = 0
 
     var vehicleLocalX: Double = 0
     var vehicleLocalZ: Double = 0
@@ -181,6 +204,12 @@ class AgGuidanceState: ObservableObject {
     // Hitch position for implement visualization
     var hitchX: Double = 0
     var hitchZ: Double = 0
+    var implementCORX: Double = 0
+    var implementCORZ: Double = 0
+
+    var freeCameraCenterX: Double = 0
+    var freeCameraCenterZ: Double = 0
+    var freeCameraHeading: Double = 0
 
     private lazy var workPointCalculator: WorkPointCalculator = {
         WorkPointCalculator(machine: vehicleConfig.machine, implement: vehicleConfig.implement)
@@ -389,6 +418,7 @@ class AgGuidanceState: ObservableObject {
         gnssAccuracy = status.horizontalAccuracy
         gnssUpdateRate = status.updateRate
         isExternalGNSS = status.isExternalGNSS
+        guidanceConfidence = guidanceConfidenceForStatus(status)
     }
 
     // MARK: - Position Handling
@@ -397,6 +427,9 @@ class AgGuidanceState: ObservableObject {
         vehicleCoordinate = update.coordinate
         vehicleHeading = update.heading
         vehicleSpeed = update.speed
+        if let altitude = update.altitude {
+            gnssAltitude = altitude
+        }
 
         // Convert antenna position to local coordinates
         if let engine = guidanceEngine {
@@ -421,6 +454,14 @@ class AgGuidanceState: ObservableObject {
             // Get hitch position for implement visualization
             hitchX = workPointCalculator.currentHitchX
             hitchZ = workPointCalculator.currentHitchZ
+            rearAxleX = workPointCalculator.currentRearAxleX
+            rearAxleZ = workPointCalculator.currentRearAxleZ
+
+            let corOffset = vehicleConfig.implement.centerOfRotationOffset
+            let corForwardX = sin(workPoint.heading)
+            let corForwardZ = cos(workPoint.heading)
+            implementCORX = hitchX + corForwardX * corOffset
+            implementCORZ = hitchZ + corForwardZ * corOffset
 
             // Calculate guidance using WORK POINT position (not antenna)
             // This ensures the implement stays on line, not the tractor
@@ -434,6 +475,8 @@ class AgGuidanceState: ObservableObject {
             crossTrackError = guidance.crossTrackError
             alongTrackDistance = guidance.alongTrackDistance
             isPastEndPoint = guidance.isPastEndPoint
+            headingError = normalizedAngle(guidance.steerToHeading - workPoint.heading)
+            guidanceConfidence = guidanceConfidenceForAccuracy(gnssAccuracy)
 
             // Auto-switch to nearest line when close enough and roughly aligned
             let nearestLine = guidance.nearestLineIndex
@@ -483,6 +526,15 @@ class AgGuidanceState: ObservableObject {
             workPointX = workPoint.x
             workPointZ = workPoint.z
             workPointHeading = workPoint.heading
+            rearAxleX = workPointCalculator.currentRearAxleX
+            rearAxleZ = workPointCalculator.currentRearAxleZ
+            hitchX = workPointCalculator.currentHitchX
+            hitchZ = workPointCalculator.currentHitchZ
+            let corOffset = vehicleConfig.implement.centerOfRotationOffset
+            let corForwardX = sin(workPoint.heading)
+            let corForwardZ = cos(workPoint.heading)
+            implementCORX = hitchX + corForwardX * corOffset
+            implementCORZ = hitchZ + corForwardZ * corOffset
         }
 
         logPositionIfNeeded(update)
@@ -548,8 +600,8 @@ class AgGuidanceState: ObservableObject {
 
         // Update scene rendering
         scene?.updateVehicle(
-            x: Float(vehicleLocalX),
-            z: Float(vehicleLocalZ),
+            x: Float(rearAxleX),
+            z: Float(rearAxleZ),
             heading: Float(vehicleHeading)
         )
 
@@ -560,25 +612,46 @@ class AgGuidanceState: ObservableObject {
             workPointHeading: Float(workPointHeading),
             hitchX: Float(hitchX),
             hitchZ: Float(hitchZ),
-            implementWidth: Float(vehicleConfig.implement.workAreaWidth)
+            implementWidth: Float(vehicleConfig.implement.workAreaWidth),
+            corX: Float(implementCORX),
+            corZ: Float(implementCORZ),
+            showDebug: showDebugMarkers
         )
 
         // Update track vector showing predicted path (5 seconds lookahead)
         scene?.updateTrackVector(
-            x: Float(vehicleLocalX),
-            z: Float(vehicleLocalZ),
+            x: Float(rearAxleX),
+            z: Float(rearAxleZ),
             heading: Float(vehicleHeading),
             speed: Float(vehicleSpeed),
             yawRate: Float(vehicleYawRate),
-            predictionTime: 5.0
+            predictionTime: 5.0,
+            showTail: showHeadingTail
+        )
+
+        scene?.updateGuidanceVisualization(
+            referenceX: Float(rearAxleX),
+            referenceZ: Float(rearAxleZ),
+            pathHeading: Float(guidanceEngine?.abLine.heading ?? vehicleHeading),
+            crossTrackError: Float(crossTrackError),
+            lookaheadDistance: 12.0,
+            headingError: Float(headingError),
+            confidence: guidanceConfidence
         )
 
         scene?.updateCamera(
-            vehicleX: Float(vehicleLocalX),
-            vehicleZ: Float(vehicleLocalZ),
+            vehicleX: Float(rearAxleX),
+            vehicleZ: Float(rearAxleZ),
             heading: Float(vehicleHeading),
             mode: viewMode,
-            headingMode: headingMode
+            headingMode: headingMode,
+            isFreeCamera: isFreeCamera,
+            freeCameraCenterX: Float(freeCameraCenterX),
+            freeCameraCenterZ: Float(freeCameraCenterZ),
+            freeCameraHeading: Float(freeCameraHeading),
+            zoom: Float(cameraZoom),
+            cameraDistance: Float(cameraDistance),
+            cameraHeight: Float(cameraHeight)
         )
 
         // Record coverage only when implement is active
@@ -792,5 +865,32 @@ class AgGuidanceState: ObservableObject {
             renderDistance: renderDistance,
             activeLineIndex: currentLineIndex
         ) ?? []
+    }
+
+    private func normalizedAngle(_ angle: Double) -> Double {
+        var normalized = angle
+        while normalized > .pi { normalized -= 2 * .pi }
+        while normalized < -.pi { normalized += 2 * .pi }
+        return normalized
+    }
+
+    private func guidanceConfidenceForAccuracy(_ accuracy: Double) -> GuidanceConfidence {
+        if positionSourceType == .simulator {
+            return .good
+        }
+        if accuracy < 0 {
+            return .invalid
+        }
+        if accuracy < 1.0 {
+            return .good
+        }
+        if accuracy < 2.5 {
+            return .degraded
+        }
+        return .invalid
+    }
+
+    private func guidanceConfidenceForStatus(_ status: GNSSStatus) -> GuidanceConfidence {
+        guidanceConfidenceForAccuracy(status.horizontalAccuracy)
     }
 }

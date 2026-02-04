@@ -14,7 +14,11 @@
 
 import SceneKit
 import UIKit
-import MapKit
+
+private enum GridDetail {
+    case fine
+    case coarse
+}
 
 class AgGuidanceScene: SCNScene {
 
@@ -27,24 +31,41 @@ class AgGuidanceScene: SCNScene {
     var tilesNode: SCNNode!
     var cameraNode: SCNNode!
     var vehicleNode: SCNNode!
-    var implementNode: SCNNode!      // T-bar implement visualization
-    var implementBarNode: SCNNode!   // Horizontal bar (work width)
-    var implementLineNode: SCNNode!  // Vertical line (hitch to work point)
+    var implementNode: SCNNode!      // Implement visualization
+    var implementFrameNode: SCNNode!
+    var implementConnectorNode: SCNNode!
+    var implementCorNode: SCNNode!
+    var hitchMarkerNode: SCNNode!
+    var rearAxleMarkerNode: SCNNode!
+    var headingTailNode: SCNNode!
     var guidanceLinesNode: SCNNode!
     var coverageNode: SCNNode!
-    var trackVectorNode: SCNNode!    // Track vector showing predicted path
+    var trackVectorNode: SCNNode!    // Heading stability tail
+    var guidancePathNode: SCNNode!
+    var guidanceIndicatorNode: SCNNode!
+    var lookaheadNode: SCNNode!
+    var headingErrorNode: SCNNode!
+    var debugNode: SCNNode!
     var boundaryNode: SCNNode!       // Field boundary visualization
 
     // MARK: - Tile Management
     private var loadedTiles: [String: SCNNode] = [:]  // "row_col" -> node
     private var currentBackgroundMode: BackgroundMode = .checkerboard
+    private var currentGridDetail: GridDetail = .fine
     private var lastGuidanceCenterKey: (x: Int, z: Int)?
     private var lastGuidanceLineIndex: Int?
     private var lastCoverageCenterKey: (row: Int, col: Int)?
     private var lastCoverageGeneration: Int = -1
 
     // MARK: - Materials
-    private var checkerboardMaterial: SCNMaterial!
+    private var gridFineMaterial: SCNMaterial!
+    private var gridCoarseMaterial: SCNMaterial!
+    private var satelliteMaterial: SCNMaterial!
+    private var coverageMaterial: SCNMaterial!
+
+    private var currentZoomScale: Float = 60
+    private var lastVehiclePosition = SCNVector3Zero
+    private var lastVehicleHeading: Float = 0
 
     // MARK: - State Reference
     weak var state: AgGuidanceState?
@@ -62,7 +83,7 @@ class AgGuidanceScene: SCNScene {
     }
 
     private func setupScene() {
-        background.contents = UIColor(red: 0.6, green: 0.8, blue: 1.0, alpha: 1.0)
+        background.contents = UIColor(red: 0.06, green: 0.08, blue: 0.1, alpha: 1.0)
         setupMaterials()
         setupLighting()
         setupContainerNodes()
@@ -74,36 +95,109 @@ class AgGuidanceScene: SCNScene {
     // MARK: - Materials
 
     private func setupMaterials() {
-        checkerboardMaterial = createCheckerboardMaterial()
+        gridFineMaterial = createGridMaterial(minorMeters: 1, majorMeters: 5)
+        gridCoarseMaterial = createGridMaterial(minorMeters: 5, majorMeters: 25)
+        satelliteMaterial = createSatellitePlaceholderMaterial()
+        coverageMaterial = createCoverageMaterial()
     }
 
-    private func createCheckerboardMaterial() -> SCNMaterial {
+    private func createGridMaterial(minorMeters: Int, majorMeters: Int) -> SCNMaterial {
         let imageSize = 512
-        let tilesPerSide = 50  // 1m tiles for 50m tile
+        let background = UIColor(red: 0.06, green: 0.08, blue: 0.1, alpha: 1.0)
+        let minorLine = UIColor.white.withAlphaComponent(0.06)
+        let majorLine = UIColor.white.withAlphaComponent(0.16)
+        let noise = UIColor.white.withAlphaComponent(0.02)
 
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: imageSize, height: imageSize))
         let image = renderer.image { context in
-            let tilePixels = CGFloat(imageSize) / CGFloat(tilesPerSide)
+            let cg = context.cgContext
+            cg.setFillColor(background.cgColor)
+            cg.fill(CGRect(x: 0, y: 0, width: imageSize, height: imageSize))
 
-            for row in 0..<tilesPerSide {
-                for col in 0..<tilesPerSide {
-                    let isGray = (row + col) % 2 == 0
-                    let color: UIColor = isGray ?
-                        UIColor(red: 0.4, green: 0.4, blue: 0.4, alpha: 1) :
-                        UIColor(red: 0.55, green: 0.55, blue: 0.55, alpha: 1)
-                    context.cgContext.setFillColor(color.cgColor)
-                    context.cgContext.fill(CGRect(
-                        x: CGFloat(col) * tilePixels,
-                        y: CGFloat(row) * tilePixels,
-                        width: tilePixels,
-                        height: tilePixels
-                    ))
-                }
+            let metersPerTile = Int(tileSize)
+            let minorCells = max(1, metersPerTile / minorMeters)
+            let minorStep = CGFloat(imageSize) / CGFloat(minorCells)
+            let majorEvery = max(1, majorMeters / minorMeters)
+
+            for i in 0...minorCells {
+                let isMajor = i % majorEvery == 0
+                let color = isMajor ? majorLine : minorLine
+                cg.setStrokeColor(color.cgColor)
+                cg.setLineWidth(isMajor ? 1.2 : 0.6)
+
+                let pos = CGFloat(i) * minorStep
+                cg.move(to: CGPoint(x: pos, y: 0))
+                cg.addLine(to: CGPoint(x: pos, y: imageSize))
+                cg.move(to: CGPoint(x: 0, y: pos))
+                cg.addLine(to: CGPoint(x: imageSize, y: pos))
+                cg.strokePath()
+            }
+
+            for _ in 0..<600 {
+                let x = CGFloat.random(in: 0..<CGFloat(imageSize))
+                let y = CGFloat.random(in: 0..<CGFloat(imageSize))
+                cg.setFillColor(noise.cgColor)
+                cg.fill(CGRect(x: x, y: y, width: 1, height: 1))
             }
         }
 
         let material = SCNMaterial()
         material.diffuse.contents = image
+        material.lightingModel = .lambert
+        material.isDoubleSided = true
+        return material
+    }
+
+    private func createSatellitePlaceholderMaterial() -> SCNMaterial {
+        let imageSize = 512
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: imageSize, height: imageSize))
+        let image = renderer.image { context in
+            let cg = context.cgContext
+            let base = UIColor(red: 0.1, green: 0.12, blue: 0.14, alpha: 1.0)
+            cg.setFillColor(base.cgColor)
+            cg.fill(CGRect(x: 0, y: 0, width: imageSize, height: imageSize))
+
+            for _ in 0..<300 {
+                let x = CGFloat.random(in: 0..<CGFloat(imageSize))
+                let y = CGFloat.random(in: 0..<CGFloat(imageSize))
+                let w = CGFloat.random(in: 10...40)
+                let h = CGFloat.random(in: 10...40)
+                let tint = UIColor.white.withAlphaComponent(0.02)
+                cg.setFillColor(tint.cgColor)
+                cg.fillEllipse(in: CGRect(x: x, y: y, width: w, height: h))
+            }
+        }
+
+        let material = SCNMaterial()
+        material.diffuse.contents = image
+        material.lightingModel = .lambert
+        material.isDoubleSided = true
+        return material
+    }
+
+    private func createCoverageMaterial() -> SCNMaterial {
+        let imageSize = 256
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: imageSize, height: imageSize))
+        let image = renderer.image { context in
+            let cg = context.cgContext
+            cg.setFillColor(UIColor.clear.cgColor)
+            cg.fill(CGRect(x: 0, y: 0, width: imageSize, height: imageSize))
+
+            let stripeColor = UIColor.white.withAlphaComponent(0.08)
+            for i in stride(from: 0, to: imageSize, by: 18) {
+                cg.setStrokeColor(stripeColor.cgColor)
+                cg.setLineWidth(2)
+                cg.move(to: CGPoint(x: 0, y: CGFloat(i)))
+                cg.addLine(to: CGPoint(x: CGFloat(imageSize), y: CGFloat(i + 8)))
+                cg.strokePath()
+            }
+        }
+
+        let material = SCNMaterial()
+        material.diffuse.contents = UIColor(red: 0.2, green: 0.6, blue: 0.3, alpha: 0.45)
+        material.emission.contents = UIColor(red: 0.2, green: 0.6, blue: 0.3, alpha: 0.15)
+        material.transparent.contents = image
+        material.blendMode = .alpha
         material.isDoubleSided = true
         return material
     }
@@ -114,13 +208,13 @@ class AgGuidanceScene: SCNScene {
         let ambientLight = SCNNode()
         ambientLight.light = SCNLight()
         ambientLight.light?.type = .ambient
-        ambientLight.light?.intensity = 800
+        ambientLight.light?.intensity = 650
         rootNode.addChildNode(ambientLight)
 
         let directionalLight = SCNNode()
         directionalLight.light = SCNLight()
         directionalLight.light?.type = .directional
-        directionalLight.light?.intensity = 600
+        directionalLight.light?.intensity = 900
         directionalLight.eulerAngles = SCNVector3(x: -.pi / 3, y: .pi / 4, z: 0)
         rootNode.addChildNode(directionalLight)
     }
@@ -134,11 +228,26 @@ class AgGuidanceScene: SCNScene {
         guidanceLinesNode = SCNNode()
         rootNode.addChildNode(guidanceLinesNode)
 
+        guidancePathNode = SCNNode()
+        rootNode.addChildNode(guidancePathNode)
+
+        guidanceIndicatorNode = SCNNode()
+        rootNode.addChildNode(guidanceIndicatorNode)
+
+        lookaheadNode = SCNNode()
+        rootNode.addChildNode(lookaheadNode)
+
+        headingErrorNode = SCNNode()
+        rootNode.addChildNode(headingErrorNode)
+
         coverageNode = SCNNode()
         rootNode.addChildNode(coverageNode)
 
         trackVectorNode = SCNNode()
         rootNode.addChildNode(trackVectorNode)
+
+        debugNode = SCNNode()
+        rootNode.addChildNode(debugNode)
 
         boundaryNode = SCNNode()
         rootNode.addChildNode(boundaryNode)
@@ -148,20 +257,38 @@ class AgGuidanceScene: SCNScene {
 
     private func setupVehicle() {
         let trianglePath = UIBezierPath()
-        trianglePath.move(to: CGPoint(x: 0, y: 2.5))
-        trianglePath.addLine(to: CGPoint(x: -1.5, y: -1.5))
-        trianglePath.addLine(to: CGPoint(x: 1.5, y: -1.5))
+        trianglePath.move(to: CGPoint(x: 0, y: 3.2))
+        trianglePath.addLine(to: CGPoint(x: -1.9, y: -1.6))
+        trianglePath.addLine(to: CGPoint(x: 1.9, y: -1.6))
         trianglePath.close()
 
         let shape = SCNShape(path: trianglePath, extrusionDepth: 0.5)
         let material = SCNMaterial()
-        material.diffuse.contents = UIColor.orange
-        material.emission.contents = UIColor.orange.withAlphaComponent(0.4)
+        material.diffuse.contents = UIColor(red: 0.96, green: 0.7, blue: 0.3, alpha: 1)
+        material.emission.contents = UIColor(red: 0.6, green: 0.4, blue: 0.2, alpha: 0.4)
+        material.lightingModel = .physicallyBased
         shape.materials = [material]
 
         vehicleNode = SCNNode(geometry: shape)
         vehicleNode.eulerAngles = SCNVector3(x: -.pi / 2, y: 0, z: 0)
-        vehicleNode.position = SCNVector3(x: 0, y: 0.5, z: 0)
+        vehicleNode.position = SCNVector3(x: 0, y: 0.6, z: 0)
+
+        let axleGeometry = SCNBox(width: 3.4, height: 0.08, length: 0.2, chamferRadius: 0.04)
+        let axleMaterial = SCNMaterial()
+        axleMaterial.diffuse.contents = UIColor.white.withAlphaComponent(0.8)
+        axleGeometry.materials = [axleMaterial]
+        rearAxleMarkerNode = SCNNode(geometry: axleGeometry)
+        rearAxleMarkerNode.position = SCNVector3(x: 0, y: -0.25, z: -1.6)
+        vehicleNode.addChildNode(rearAxleMarkerNode)
+
+        let tailGeometry = SCNBox(width: 0.12, height: 0.08, length: 8.0, chamferRadius: 0.04)
+        let tailMaterial = SCNMaterial()
+        tailMaterial.diffuse.contents = UIColor.systemTeal.withAlphaComponent(0.6)
+        tailMaterial.emission.contents = UIColor.systemTeal.withAlphaComponent(0.3)
+        tailGeometry.materials = [tailMaterial]
+        headingTailNode = SCNNode(geometry: tailGeometry)
+        headingTailNode.position = SCNVector3(x: 0, y: -0.2, z: -4.5)
+        vehicleNode.addChildNode(headingTailNode)
 
         rootNode.addChildNode(vehicleNode)
     }
@@ -169,30 +296,36 @@ class AgGuidanceScene: SCNScene {
     // MARK: - Implement T-Bar
 
     private func setupImplement() {
-        // Container node for the implement visualization
         implementNode = SCNNode()
-        implementNode.position = SCNVector3(x: 0, y: 0.3, z: 0)
+        implementNode.position = SCNVector3(x: 0, y: 0.25, z: 0)
 
-        // Green material for implement
         let implementMaterial = SCNMaterial()
-        implementMaterial.diffuse.contents = UIColor.green
-        implementMaterial.emission.contents = UIColor.green.withAlphaComponent(0.5)
+        implementMaterial.diffuse.contents = UIColor(red: 0.2, green: 0.8, blue: 0.5, alpha: 1)
+        implementMaterial.emission.contents = UIColor(red: 0.1, green: 0.4, blue: 0.3, alpha: 0.35)
 
-        // Vertical line (hitch to work point) - default 3m length
-        let lineGeometry = SCNBox(width: 0.2, height: 0.15, length: 3.0, chamferRadius: 0)
-        lineGeometry.materials = [implementMaterial]
-        implementLineNode = SCNNode(geometry: lineGeometry)
-        implementLineNode.position = SCNVector3(x: 0, y: 0, z: -1.5)  // Offset behind vehicle
+        let frameGeometry = SCNBox(width: 6.0, height: 0.12, length: 1.0, chamferRadius: 0.05)
+        frameGeometry.materials = [implementMaterial]
+        implementFrameNode = SCNNode(geometry: frameGeometry)
+        implementFrameNode.position = SCNVector3(x: 0, y: 0, z: -3.0)
 
-        // Horizontal bar (work width) - default 6m width
-        let barGeometry = SCNBox(width: 6.0, height: 0.15, length: 0.3, chamferRadius: 0)
-        barGeometry.materials = [implementMaterial]
-        implementBarNode = SCNNode(geometry: barGeometry)
-        implementBarNode.position = SCNVector3(x: 0, y: 0, z: -3.0)  // At end of vertical line
+        let connectorGeometry = SCNBox(width: 0.1, height: 0.08, length: 3.0, chamferRadius: 0.04)
+        let connectorMaterial = SCNMaterial()
+        connectorMaterial.diffuse.contents = UIColor.white.withAlphaComponent(0.4)
+        connectorGeometry.materials = [connectorMaterial]
+        implementConnectorNode = SCNNode(geometry: connectorGeometry)
+        implementConnectorNode.position = SCNVector3(x: 0, y: 0, z: -1.5)
 
-        implementNode.addChildNode(implementLineNode)
-        implementNode.addChildNode(implementBarNode)
+        implementCorNode = makeMarkerNode(radius: 0.18, color: UIColor.systemTeal.withAlphaComponent(0.9), ring: true)
+        implementCorNode.position = SCNVector3(x: 0, y: 0.12, z: -3.0)
+
+        hitchMarkerNode = makeMarkerNode(radius: 0.2, color: UIColor.systemYellow.withAlphaComponent(0.9), ring: true)
+        hitchMarkerNode.position = SCNVector3(x: 0, y: 0.12, z: 0)
+
+        implementNode.addChildNode(implementConnectorNode)
+        implementNode.addChildNode(implementFrameNode)
+        implementNode.addChildNode(implementCorNode)
         rootNode.addChildNode(implementNode)
+        rootNode.addChildNode(hitchMarkerNode)
     }
 
     // MARK: - Camera
@@ -200,11 +333,11 @@ class AgGuidanceScene: SCNScene {
     private func setupCamera() {
         cameraNode = SCNNode()
         cameraNode.camera = SCNCamera()
-        cameraNode.camera?.fieldOfView = 60
+        cameraNode.camera?.fieldOfView = 55
         cameraNode.camera?.zNear = 1
         cameraNode.camera?.zFar = 1000
 
-        cameraNode.position = SCNVector3(x: 0, y: 30, z: -40)
+        cameraNode.position = SCNVector3(x: 0, y: 18, z: -28)
         cameraNode.look(at: SCNVector3(x: 0, y: 0, z: 0))
 
         rootNode.addChildNode(cameraNode)
@@ -213,6 +346,12 @@ class AgGuidanceScene: SCNScene {
     // MARK: - Tile Management
 
     func updateTiles(centerX: Double, centerZ: Double, renderDistance: Double) {
+        let desiredDetail = gridDetail(for: currentZoomScale)
+        if desiredDetail != currentGridDetail && currentBackgroundMode == .checkerboard {
+            currentGridDetail = desiredDetail
+            reloadTiles()
+        }
+
         let tilesNeeded = Int(ceil(renderDistance / Double(tileSize))) + 1
 
         let centerTileX = Int(floor(centerX / Double(tileSize)))
@@ -287,7 +426,7 @@ class AgGuidanceScene: SCNScene {
         let key = "\(x)_\(z)"
 
         let tileGeometry = SCNPlane(width: tileSize, height: tileSize)
-        tileGeometry.materials = [checkerboardMaterial]
+        tileGeometry.materials = [currentTileMaterial()]
 
         let tileNode = SCNNode(geometry: tileGeometry)
         tileNode.eulerAngles = SCNVector3(x: -.pi / 2, y: 0, z: 0)
@@ -305,6 +444,26 @@ class AgGuidanceScene: SCNScene {
         loadedTiles.removeValue(forKey: key)
     }
 
+    private func reloadTiles() {
+        let keys = Array(loadedTiles.keys)
+        for key in keys {
+            unloadTile(key: key)
+        }
+    }
+
+    private func currentTileMaterial() -> SCNMaterial {
+        switch currentBackgroundMode {
+        case .checkerboard:
+            return currentGridDetail == .fine ? gridFineMaterial : gridCoarseMaterial
+        case .satellite:
+            return satelliteMaterial
+        }
+    }
+
+    private func gridDetail(for zoom: Float) -> GridDetail {
+        zoom > 80 ? .coarse : .fine
+    }
+
     // MARK: - Guidance Lines
 
     private func updateGuidanceLines(centerX: Double, centerZ: Double, renderDistance: Double) {
@@ -319,11 +478,15 @@ class AgGuidanceScene: SCNScene {
         let lineLength: CGFloat = CGFloat(renderDistance * 3)
 
         for line in lines {
-            let lineGeometry = SCNBox(width: 0.3, height: 0.08, length: lineLength, chamferRadius: 0)
+            let lineGeometry = SCNBox(width: 0.18, height: 0.05, length: lineLength, chamferRadius: 0)
 
             let lineMaterial = SCNMaterial()
-            lineMaterial.diffuse.contents = line.isActive ? UIColor.yellow : UIColor.cyan
-            lineMaterial.emission.contents = (line.isActive ? UIColor.yellow : UIColor.cyan).withAlphaComponent(0.4)
+            lineMaterial.diffuse.contents = line.isActive
+                ? UIColor.systemTeal.withAlphaComponent(0.4)
+                : UIColor.white.withAlphaComponent(0.15)
+            lineMaterial.emission.contents = line.isActive
+                ? UIColor.systemTeal.withAlphaComponent(0.2)
+                : UIColor.clear
             lineGeometry.materials = [lineMaterial]
 
             let lineNode = SCNNode(geometry: lineGeometry)
@@ -357,10 +520,6 @@ class AgGuidanceScene: SCNScene {
         let maxCol = Int(ceil((centerX + renderDistance) / cellSize))
         let minRow = Int(floor((centerZ - renderDistance) / cellSize))
         let maxRow = Int(ceil((centerZ + renderDistance) / cellSize))
-
-        let coverageMaterial = SCNMaterial()
-        coverageMaterial.diffuse.contents = UIColor.green.withAlphaComponent(0.7)
-        coverageMaterial.emission.contents = UIColor.green.withAlphaComponent(0.2)
 
         // Batch into strips per row for performance
         for row in minRow...maxRow {
@@ -401,23 +560,23 @@ class AgGuidanceScene: SCNScene {
     // MARK: - Public Methods
 
     func switchCameraMode(_ mode: ViewMode) {
+        SCNTransaction.begin()
+        SCNTransaction.animationDuration = 0.35
         switch mode {
         case .perspective3D:
             cameraNode.camera?.usesOrthographicProjection = false
-            cameraNode.camera?.fieldOfView = 60
+            cameraNode.camera?.fieldOfView = 55
         case .topDown2D:
             cameraNode.camera?.usesOrthographicProjection = true
             cameraNode.camera?.orthographicScale = 60
         }
+        SCNTransaction.commit()
     }
 
     func updateBackgroundMode(_ mode: BackgroundMode) {
         currentBackgroundMode = mode
         // Reload all tiles with new material
-        let keys = Array(loadedTiles.keys)
-        for key in keys {
-            unloadTile(key: key)
-        }
+        reloadTiles()
         // Tiles will be reloaded on next update
     }
 
@@ -426,6 +585,8 @@ class AgGuidanceScene: SCNScene {
         // Triangle tip points +Y in local space, rotated to lay flat on XZ plane
         // Y rotation matches camera so vehicle always points "up" on screen
         vehicleNode.eulerAngles = SCNVector3(x: -.pi / 2, y: heading + .pi, z: 0)
+        lastVehiclePosition = SCNVector3(x: x, y: 0.1, z: z)
+        lastVehicleHeading = heading
     }
 
     func updateImplement(
@@ -434,45 +595,53 @@ class AgGuidanceScene: SCNScene {
         workPointHeading: Float,
         hitchX: Float,
         hitchZ: Float,
-        implementWidth: Float
+        implementWidth: Float,
+        corX: Float,
+        corZ: Float,
+        showDebug: Bool
     ) {
-        // T-bar visualization:
-        // - Horizontal bar at HITCH (connects to tractor)
-        // - Vertical line extends from hitch back to work point
-        // - Whole T pivots around the hitch point
+        // Implement visualization:
+        // - Connector from hitch to implement
+        // - Implement frame at work point
+        // - COR marker on implement
 
-        // Calculate the line length from hitch to work point
         let dx = workPointX - hitchX
         let dz = workPointZ - hitchZ
         let lineLength = sqrt(dx * dx + dz * dz)
 
-        // Update line geometry (vertical part of T - from hitch to work point)
-        if let lineGeometry = implementLineNode.geometry as? SCNBox {
-            let newLine = SCNBox(width: 0.2, height: 0.15, length: CGFloat(max(0.5, lineLength)), chamferRadius: 0)
-            newLine.materials = lineGeometry.materials
-            implementLineNode.geometry = newLine
+        if let connectorGeometry = implementConnectorNode.geometry as? SCNBox {
+            let newLine = SCNBox(width: 0.1, height: 0.08, length: CGFloat(max(0.5, lineLength)), chamferRadius: 0.04)
+            newLine.materials = connectorGeometry.materials
+            implementConnectorNode.geometry = newLine
         }
 
-        // Update bar geometry (horizontal part of T - at hitch)
-        if let barGeometry = implementBarNode.geometry as? SCNBox {
-            let newBar = SCNBox(width: CGFloat(implementWidth), height: 0.15, length: 0.3, chamferRadius: 0)
-            newBar.materials = barGeometry.materials
-            implementBarNode.geometry = newBar
+        if let frameGeometry = implementFrameNode.geometry as? SCNBox {
+            let newFrame = SCNBox(width: CGFloat(implementWidth), height: 0.12, length: 1.0, chamferRadius: 0.05)
+            newFrame.materials = frameGeometry.materials
+            implementFrameNode.geometry = newFrame
         }
 
-        // Position the whole T at the hitch point (pivot point)
-        // The T rotates around the hitch based on implement heading
-        implementNode.position = SCNVector3(x: hitchX, y: 0.3, z: hitchZ)
+        implementNode.position = SCNVector3(x: hitchX, y: 0.25, z: hitchZ)
         implementNode.eulerAngles = SCNVector3(x: 0, y: -workPointHeading, z: 0)
 
-        // Bar is at hitch (local origin of parent)
-        implementBarNode.position = SCNVector3(x: 0, y: 0, z: 0)
-        implementBarNode.eulerAngles = SCNVector3(x: 0, y: 0, z: 0)
+        implementConnectorNode.position = SCNVector3(x: 0, y: 0, z: -lineLength / 2)
+        implementFrameNode.position = SCNVector3(x: 0, y: 0, z: -lineLength)
+        let corDx = corX - hitchX
+        let corDz = corZ - hitchZ
+        let corDistance = sqrt(corDx * corDx + corDz * corDz)
+        implementCorNode.position = SCNVector3(x: 0, y: 0.12, z: -corDistance)
 
-        // Line extends backward from hitch to work point
-        // Position at half the line length behind hitch (in local -Z direction)
-        implementLineNode.position = SCNVector3(x: 0, y: 0, z: -lineLength / 2)
-        implementLineNode.eulerAngles = SCNVector3(x: 0, y: 0, z: 0)
+        hitchMarkerNode.position = SCNVector3(x: hitchX, y: 0.12, z: hitchZ)
+
+        updateDebugMarkers(
+            rearAxle: lastVehiclePosition,
+            hitch: SCNVector3(x: hitchX, y: 0.1, z: hitchZ),
+            cor: SCNVector3(x: corX, y: 0.1, z: corZ),
+            implementCenter: SCNVector3(x: workPointX, y: 0.1, z: workPointZ),
+            implementWidth: implementWidth,
+            implementHeading: workPointHeading,
+            showDebug: showDebug
+        )
     }
 
     // MARK: - Track Vector
@@ -485,92 +654,111 @@ class AgGuidanceScene: SCNScene {
         heading: Float,
         speed: Float,
         yawRate: Float,
-        predictionTime: Float
+        predictionTime: Float,
+        showTail: Bool
     ) {
-        // Remove old track vector segments
-        trackVectorNode.childNodes.forEach { $0.removeFromParentNode() }
+        trackVectorNode.isHidden = !showTail
+        guard showTail else { return }
+        let speedScale = max(4.0, min(12.0, speed * 2.5))
+        if let tailGeometry = headingTailNode.geometry as? SCNBox {
+            let newTail = SCNBox(width: 0.12, height: 0.08, length: CGFloat(speedScale), chamferRadius: 0.04)
+            newTail.materials = tailGeometry.materials
+            headingTailNode.geometry = newTail
+        }
+        headingTailNode.position = SCNVector3(x: 0, y: -0.2, z: -Float(speedScale / 2 + 1.2))
+    }
 
-        // Only show if moving
-        guard speed > 0.1 else { return }
+    func updateGuidanceVisualization(
+        referenceX: Float,
+        referenceZ: Float,
+        pathHeading: Float,
+        crossTrackError: Float,
+        lookaheadDistance: Float,
+        headingError: Float,
+        confidence: GuidanceConfidence
+    ) {
+        guidancePathNode.childNodes.forEach { $0.removeFromParentNode() }
+        guidanceIndicatorNode.childNodes.forEach { $0.removeFromParentNode() }
+        lookaheadNode.childNodes.forEach { $0.removeFromParentNode() }
+        headingErrorNode.childNodes.forEach { $0.removeFromParentNode() }
 
-        // Use 5 seconds for lookahead prediction
-        let lookaheadTime: Float = 5.0
-        let numSegments = 40  // More segments for smoother curves
-        var points: [SCNVector3] = []
+        let forwardX = sin(pathHeading)
+        let forwardZ = cos(pathHeading)
+        let rightX = cos(pathHeading)
+        let rightZ = -sin(pathHeading)
 
-        // Smooth the yaw rate with decay for more natural prediction
-        // Assumes yaw rate gradually returns to zero over time
-        let yawRateDecay: Float = 0.3  // How quickly turn straightens out
+        let pathX = referenceX - rightX * crossTrackError
+        let pathZ = referenceZ - rightZ * crossTrackError
 
-        // Current position and heading
-        var currentX = x
-        var currentZ = z
-        var currentHeading = heading
-        var currentYawRate = yawRate
+        let lineLength: Float = 240
+        let pathGeometry = SCNBox(width: 0.18, height: 0.05, length: CGFloat(lineLength), chamferRadius: 0.02)
+        let pathMaterial = SCNMaterial()
+        let pathColor = color(for: confidence)
+        pathMaterial.diffuse.contents = pathColor.withAlphaComponent(0.8)
+        pathMaterial.emission.contents = pathColor.withAlphaComponent(0.3)
+        pathGeometry.materials = [pathMaterial]
+        let pathNode = SCNNode(geometry: pathGeometry)
+        pathNode.position = SCNVector3(x: pathX, y: 0.12, z: pathZ)
+        pathNode.eulerAngles = SCNVector3(x: 0, y: -pathHeading, z: 0)
+        guidancePathNode.addChildNode(pathNode)
 
-        // Use integration for smooth path prediction
-        let dt = lookaheadTime / Float(numSegments)
+        let lookaheadX = pathX + forwardX * lookaheadDistance
+        let lookaheadZ = pathZ + forwardZ * lookaheadDistance
+        let lookaheadMarker = makeMarkerNode(radius: 0.22, color: UIColor.systemTeal.withAlphaComponent(0.9), ring: true)
+        lookaheadMarker.position = SCNVector3(x: lookaheadX, y: 0.14, z: lookaheadZ)
+        lookaheadNode.addChildNode(lookaheadMarker)
 
-        for i in 0...numSegments {
-            points.append(SCNVector3(x: currentX, y: 0.6, z: currentZ))
-
-            if i < numSegments {
-                // Integrate position using current heading
-                // dx/dt = speed * sin(heading)
-                // dz/dt = speed * cos(heading)
-                currentX += speed * sin(currentHeading) * dt
-                currentZ += speed * cos(currentHeading) * dt
-
-                // Update heading based on current yaw rate
-                currentHeading += currentYawRate * dt
-
-                // Decay yaw rate toward zero (natural straightening)
-                currentYawRate *= (1.0 - yawRateDecay * dt)
-
-                // Normalize heading
-                while currentHeading > .pi { currentHeading -= 2 * .pi }
-                while currentHeading < -.pi { currentHeading += 2 * .pi }
-            }
+        let errorLength = abs(crossTrackError)
+        if errorLength > 0.05 {
+            let errorGeometry = SCNBox(width: 0.08, height: 0.05, length: CGFloat(errorLength), chamferRadius: 0.02)
+            let errorMaterial = SCNMaterial()
+            errorMaterial.diffuse.contents = UIColor.white.withAlphaComponent(0.5)
+            errorGeometry.materials = [errorMaterial]
+            let errorNode = SCNNode(geometry: errorGeometry)
+            errorNode.position = SCNVector3(
+                x: (referenceX + pathX) / 2,
+                y: 0.12,
+                z: (referenceZ + pathZ) / 2
+            )
+            let errorAngle = atan2(rightX, rightZ)
+            errorNode.eulerAngles = SCNVector3(x: 0, y: -errorAngle, z: 0)
+            guidanceIndicatorNode.addChildNode(errorNode)
         }
 
-        // Create line segments with gradient color (brighter near vehicle)
-        for i in 0..<points.count - 1 {
-            let start = points[i]
-            let end = points[i + 1]
-
-            let dx = end.x - start.x
-            let dz = end.z - start.z
-            let length = sqrt(dx * dx + dz * dz)
-
-            guard length > 0.01 else { continue }
-
-            // Color gradient: bright cyan near vehicle, fading to transparent
-            let progress = Float(i) / Float(points.count - 1)
-            let alpha = 1.0 - progress * 0.7  // Fade from 1.0 to 0.3
-
-            let trackMaterial = SCNMaterial()
-            trackMaterial.diffuse.contents = UIColor.cyan.withAlphaComponent(CGFloat(alpha))
-            trackMaterial.emission.contents = UIColor.cyan.withAlphaComponent(CGFloat(alpha * 0.5))
-
-            let segmentGeometry = SCNBox(width: 0.2, height: 0.12, length: CGFloat(length), chamferRadius: 0)
-            segmentGeometry.materials = [trackMaterial]
-
-            let segmentNode = SCNNode(geometry: segmentGeometry)
-            segmentNode.position = SCNVector3(
-                x: (start.x + end.x) / 2,
-                y: start.y,
-                z: (start.z + end.z) / 2
+        let clampedHeadingError = max(-.pi / 3, min(.pi / 3, headingError))
+        if abs(clampedHeadingError) > 0.01 {
+            let arcPath = UIBezierPath(
+                arcCenter: CGPoint.zero,
+                radius: 2.4,
+                startAngle: 0,
+                endAngle: CGFloat(clampedHeadingError),
+                clockwise: clampedHeadingError > 0
             )
-
-            // Rotate to align with segment direction
-            let angle = atan2(dx, dz)
-            segmentNode.eulerAngles = SCNVector3(x: 0, y: -angle, z: 0)
-
-            trackVectorNode.addChildNode(segmentNode)
+            let arcShape = SCNShape(path: arcPath, extrusionDepth: 0.05)
+            let arcMaterial = SCNMaterial()
+            arcMaterial.diffuse.contents = UIColor.systemOrange.withAlphaComponent(0.7)
+            arcShape.materials = [arcMaterial]
+            let arcNode = SCNNode(geometry: arcShape)
+            arcNode.position = SCNVector3(x: referenceX, y: 0.12, z: referenceZ)
+            arcNode.eulerAngles = SCNVector3(x: -.pi / 2, y: -pathHeading, z: 0)
+            headingErrorNode.addChildNode(arcNode)
         }
     }
 
-    func updateCamera(vehicleX: Float, vehicleZ: Float, heading: Float, mode: ViewMode, headingMode: HeadingMode = .northUp) {
+    func updateCamera(
+        vehicleX: Float,
+        vehicleZ: Float,
+        heading: Float,
+        mode: ViewMode,
+        headingMode: HeadingMode = .northUp,
+        isFreeCamera: Bool,
+        freeCameraCenterX: Float,
+        freeCameraCenterZ: Float,
+        freeCameraHeading: Float,
+        zoom: Float,
+        cameraDistance: Float,
+        cameraHeight: Float
+    ) {
         // Determine effective heading for camera rotation
         // In heading-up mode, camera rotates with vehicle so vehicle always points up
         // In north-up mode, camera stays fixed (north is up)
@@ -579,16 +767,16 @@ class AgGuidanceScene: SCNScene {
         switch mode {
         case .perspective3D:
             // Camera behind vehicle, looking forward along heading
-            let cameraDistance: Float = 30
-            let cameraHeight: Float = 15
-            let tiltAngle: Float = .pi / 8  // How much camera looks down
+            let tiltAngle: Float = .pi / 9  // How much camera looks down
 
             // In heading-up mode, camera follows heading; in north-up, always behind
             let cameraHeading = headingMode == .headingUp ? heading : heading
 
             // Position camera behind vehicle (opposite of heading direction)
-            let cameraX = vehicleX - sin(cameraHeading) * cameraDistance
-            let cameraZ = vehicleZ - cos(cameraHeading) * cameraDistance
+            let focusX = isFreeCamera ? freeCameraCenterX : vehicleX
+            let focusZ = isFreeCamera ? freeCameraCenterZ : vehicleZ
+            let cameraX = focusX - sin(cameraHeading) * cameraDistance
+            let cameraZ = focusZ - cos(cameraHeading) * cameraDistance
 
             // Smooth camera movement
             let smoothing: Float = 0.12
@@ -605,22 +793,138 @@ class AgGuidanceScene: SCNScene {
             // X: tilt down to look at ground ahead
             // Y: rotate to face heading direction
             // Z: 0 (no roll - keeps horizon level)
-            cameraNode.eulerAngles = SCNVector3(x: -tiltAngle, y: cameraHeading + .pi, z: 0)
+            let headingOffset = isFreeCamera ? freeCameraHeading : 0
+            cameraNode.eulerAngles = SCNVector3(x: -tiltAngle, y: cameraHeading + .pi + headingOffset, z: 0)
 
         case .topDown2D:
             // Camera directly above vehicle
-            cameraNode.position = SCNVector3(x: vehicleX, y: 100, z: vehicleZ)
+            let focusX = isFreeCamera ? freeCameraCenterX : vehicleX
+            let focusZ = isFreeCamera ? freeCameraCenterZ : vehicleZ
+            let currentPos = cameraNode.position
+            let targetPos = SCNVector3(x: focusX, y: zoom, z: focusZ)
+            let smoothing: Float = 0.2
+            cameraNode.position = SCNVector3(
+                x: currentPos.x + (targetPos.x - currentPos.x) * smoothing,
+                y: currentPos.y + (targetPos.y - currentPos.y) * smoothing,
+                z: currentPos.z + (targetPos.z - currentPos.z) * smoothing
+            )
+            cameraNode.camera?.orthographicScale = Double(zoom)
             // X: -90° to look straight down
             // Y: rotate based on heading mode
             //    heading-up: rotate so vehicle heading points to top of screen
             //    north-up: keep north at top (Y = 0)
             // Z: 0 (no roll)
-            cameraNode.eulerAngles = SCNVector3(x: -.pi / 2, y: effectiveHeading + .pi, z: 0)
+            let headingOffset = isFreeCamera ? freeCameraHeading : 0
+            cameraNode.eulerAngles = SCNVector3(x: -.pi / 2, y: effectiveHeading + .pi + headingOffset, z: 0)
         }
+        currentZoomScale = mode == .topDown2D ? zoom : cameraDistance
     }
 
     func highlightActiveLine(index: Int) {
         // Lines are recreated each frame, so this is handled in updateGuidanceLines
+    }
+
+    private func updateDebugMarkers(
+        rearAxle: SCNVector3,
+        hitch: SCNVector3,
+        cor: SCNVector3,
+        implementCenter: SCNVector3,
+        implementWidth: Float,
+        implementHeading: Float,
+        showDebug: Bool
+    ) {
+        debugNode.childNodes.forEach { $0.removeFromParentNode() }
+        guard showDebug else { return }
+
+        let rearAxleMarker = makeMarkerNode(radius: 0.16, color: UIColor.white.withAlphaComponent(0.7), ring: false)
+        rearAxleMarker.position = rearAxle
+        debugNode.addChildNode(rearAxleMarker)
+
+        let hitchMarker = makeMarkerNode(radius: 0.12, color: UIColor.systemYellow.withAlphaComponent(0.6), ring: false)
+        hitchMarker.position = hitch
+        debugNode.addChildNode(hitchMarker)
+
+        let corMarker = makeMarkerNode(radius: 0.12, color: UIColor.systemTeal.withAlphaComponent(0.6), ring: false)
+        corMarker.position = cor
+        debugNode.addChildNode(corMarker)
+
+        let halfWidth = implementWidth / 2
+        let forwardX = sin(implementHeading)
+        let forwardZ = cos(implementHeading)
+        let rightX = cos(implementHeading)
+        let rightZ = -sin(implementHeading)
+        let cornerOffset = 0.5
+
+        let corners = [
+            SCNVector3(
+                x: implementCenter.x + rightX * halfWidth + forwardX * cornerOffset,
+                y: 0.1,
+                z: implementCenter.z + rightZ * halfWidth + forwardZ * cornerOffset
+            ),
+            SCNVector3(
+                x: implementCenter.x - rightX * halfWidth + forwardX * cornerOffset,
+                y: 0.1,
+                z: implementCenter.z - rightZ * halfWidth + forwardZ * cornerOffset
+            ),
+            SCNVector3(
+                x: implementCenter.x + rightX * halfWidth - forwardX * cornerOffset,
+                y: 0.1,
+                z: implementCenter.z + rightZ * halfWidth - forwardZ * cornerOffset
+            ),
+            SCNVector3(
+                x: implementCenter.x - rightX * halfWidth - forwardX * cornerOffset,
+                y: 0.1,
+                z: implementCenter.z - rightZ * halfWidth - forwardZ * cornerOffset
+            )
+        ]
+
+        for corner in corners {
+            let marker = makeMarkerNode(radius: 0.08, color: UIColor.white.withAlphaComponent(0.5), ring: false)
+            marker.position = corner
+            debugNode.addChildNode(marker)
+        }
+
+        let axisLength: Float = 1.2
+        let axisGeometry = SCNBox(width: 0.05, height: 0.05, length: CGFloat(axisLength), chamferRadius: 0.02)
+        let axisMaterial = SCNMaterial()
+        axisMaterial.diffuse.contents = UIColor.white.withAlphaComponent(0.5)
+        axisGeometry.materials = [axisMaterial]
+        let axisNode = SCNNode(geometry: axisGeometry)
+        axisNode.position = rearAxle
+        axisNode.eulerAngles = SCNVector3(x: 0, y: -lastVehicleHeading, z: 0)
+        debugNode.addChildNode(axisNode)
+    }
+
+    private func makeMarkerNode(radius: CGFloat, color: UIColor, ring: Bool) -> SCNNode {
+        let dotGeometry = SCNCylinder(radius: radius, height: 0.06)
+        let dotMaterial = SCNMaterial()
+        dotMaterial.diffuse.contents = color
+        dotGeometry.materials = [dotMaterial]
+        let dotNode = SCNNode(geometry: dotGeometry)
+        dotNode.eulerAngles = SCNVector3(x: .pi / 2, y: 0, z: 0)
+
+        if ring {
+            let ringGeometry = SCNTorus(ringRadius: radius * 1.6, pipeRadius: radius * 0.18)
+            let ringMaterial = SCNMaterial()
+            ringMaterial.diffuse.contents = color.withAlphaComponent(0.5)
+            ringGeometry.materials = [ringMaterial]
+            let ringNode = SCNNode(geometry: ringGeometry)
+            ringNode.eulerAngles = SCNVector3(x: .pi / 2, y: 0, z: 0)
+            dotNode.addChildNode(ringNode)
+        }
+
+        return dotNode
+    }
+
+    private func color(for confidence: GuidanceConfidence) -> UIColor {
+        switch confidence {
+        case .good:
+            return UIColor.systemTeal
+        case .degraded:
+            return UIColor.systemOrange
+        case .invalid:
+            return UIColor.systemGray
+        }
     }
 
     // MARK: - Field Boundary
