@@ -3,6 +3,17 @@
 <plist version="1.0">
 <dict>
 	<key>MAPS_API_KEY</key>
-	<string>$(MAPS_API_KEY)</string>
+	<string>AIzaSyAABNnKJMl_TxjzW5AFVDicOrKxinbk1rc</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>This app uses your location to provide agricultural guidance and track field coverage.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>This app uses your location to provide agricultural guidance and track field coverage, even when in the background.</string>
+	<key>UISupportedExternalAccessoryProtocols</key>
+	<array>
+		<string>com.bad-elf.gps</string>
+		<string>com.garmin.glo</string>
+		<string>com.dualav.xgps150</string>
+		<string>com.dualav.xgps160</string>
+	</array>
 </dict>
 </plist>

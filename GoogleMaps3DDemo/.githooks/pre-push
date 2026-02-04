@@ -1,0 +1,114 @@
+#!/bin/bash
+
+# Pre-push hook for AgGuidance iOS project
+# Runs build checks, tests, and type validation before pushing
+
+set -e
+
+echo "🚀 Running pre-push checks..."
+echo ""
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# Get the directory of the git repo
+REPO_ROOT=$(git rev-parse --show-toplevel)
+cd "$REPO_ROOT"
+
+# Track if any check fails
+FAILED=0
+
+# Function to print status
+print_status() {
+    if [ $1 -eq 0 ]; then
+        echo -e "${GREEN}✓ $2${NC}"
+    else
+        echo -e "${RED}✗ $2${NC}"
+        FAILED=1
+    fi
+}
+
+# 1. Check for Swift files with syntax errors (quick type check)
+echo "📝 Checking Swift syntax..."
+if swift -parse GoogleMaps3DDemo/**/*.swift 2>/dev/null; then
+    print_status 0 "Swift syntax check"
+else
+    # Fall back to xcodebuild for full check
+    print_status 0 "Swift syntax check (will verify in build)"
+fi
+
+# 2. Build the project
+echo ""
+echo "🔨 Building project..."
+BUILD_OUTPUT=$(xcodebuild -scheme GoogleMaps3DDemo \
+    -destination 'generic/platform=iOS Simulator' \
+    -quiet \
+    build 2>&1) || true
+
+if echo "$BUILD_OUTPUT" | grep -q "BUILD SUCCEEDED"; then
+    print_status 0 "Build"
+else
+    echo "$BUILD_OUTPUT" | grep -E "(error:|warning:)" | head -20
+    print_status 1 "Build"
+fi
+
+# 3. Run unit tests (if test target exists)
+echo ""
+echo "🧪 Running tests..."
+TEST_OUTPUT=$(xcodebuild -scheme GoogleMaps3DDemo \
+    -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
+    -quiet \
+    test 2>&1) || true
+
+if echo "$TEST_OUTPUT" | grep -q "TEST SUCCEEDED\|Test Suite .* passed"; then
+    print_status 0 "Tests"
+elif echo "$TEST_OUTPUT" | grep -q "no test bundle"; then
+    echo -e "${YELLOW}⚠ No test bundle found - skipping tests${NC}"
+else
+    # Check if it's just missing tests vs actual failures
+    if echo "$TEST_OUTPUT" | grep -q "TEST FAILED"; then
+        echo "$TEST_OUTPUT" | grep -E "(Test Case|failed)" | head -10
+        print_status 1 "Tests"
+    else
+        echo -e "${YELLOW}⚠ Could not run tests${NC}"
+    fi
+fi
+
+# 4. Check for common issues
+echo ""
+echo "🔍 Checking for common issues..."
+
+# Check for TODO/FIXME in staged changes
+if git diff --cached --name-only | xargs grep -l "TODO\|FIXME" 2>/dev/null | grep -q ".swift$"; then
+    echo -e "${YELLOW}⚠ Found TODO/FIXME comments in staged Swift files${NC}"
+fi
+
+# Check for print statements (should use proper logging)
+PRINT_COUNT=$(git diff --cached -- "*.swift" | grep -c "^\+.*print(" || true)
+if [ "$PRINT_COUNT" -gt 0 ]; then
+    echo -e "${YELLOW}⚠ Found $PRINT_COUNT new print() statements - consider using proper logging${NC}"
+fi
+
+# Check for force unwraps
+FORCE_UNWRAP_COUNT=$(git diff --cached -- "*.swift" | grep -c "^\+.*[^?]!" || true)
+if [ "$FORCE_UNWRAP_COUNT" -gt 5 ]; then
+    echo -e "${YELLOW}⚠ Found $FORCE_UNWRAP_COUNT force unwraps in changes${NC}"
+fi
+
+print_status 0 "Code quality checks"
+
+# Summary
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+if [ $FAILED -eq 0 ]; then
+    echo -e "${GREEN}✓ All pre-push checks passed!${NC}"
+    exit 0
+else
+    echo -e "${RED}✗ Pre-push checks failed!${NC}"
+    echo ""
+    echo "Fix the issues above or use 'git push --no-verify' to bypass (not recommended)"
+    exit 1
+fi

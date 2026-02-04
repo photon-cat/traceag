@@ -48,6 +48,9 @@ struct GoogleMaps3DDemoApp: App {
           NavigationLink(destination: MarkerCollisionDemo()) {
             Text("Marker Collision Demo")
           }
+          NavigationLink(destination: AgGuidanceDemo()) {
+            Text("Ag Guidance Demo")
+          }
         }
       }
 
