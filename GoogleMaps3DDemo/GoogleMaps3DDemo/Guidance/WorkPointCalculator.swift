@@ -44,6 +44,8 @@ class WorkPointCalculator {
     // Exposed hitch position for visualization
     private(set) var currentHitchX: Double = 0
     private(set) var currentHitchZ: Double = 0
+    private(set) var currentRearAxleX: Double = 0
+    private(set) var currentRearAxleZ: Double = 0
 
     // MARK: - Initialization
 
@@ -77,6 +79,8 @@ class WorkPointCalculator {
             antennaZ: antennaZ,
             tractorHeading: tractorHeading
         )
+        currentRearAxleX = rearAxle.x
+        currentRearAxleZ = rearAxle.z
 
         // Step 2: Rear Axle → Hitch Point
         // P_hitch = P_axle + R(θ_tractor) · d_hitch_offset

@@ -14,12 +14,8 @@
 
 import SwiftUI
 
-struct AgGuidanceDemo: View {
-    var body: some View {
-        GuidanceView()
+final class GuidanceViewModel: AgGuidanceState {
+    override init() {
+        super.init()
     }
-}
-
-#Preview {
-    AgGuidanceDemo()
 }
