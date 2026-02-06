@@ -66,6 +66,20 @@ class AgGuidanceState: ObservableObject {
     @Published var isPastEndPoint: Bool = false
     @Published var abPointState: ABPointState = .none
 
+    // MARK: - Track Vector Properties (for path visualization)
+
+    @Published var headingError: Double = 0
+    @Published var desiredPathPoints: [CGPoint] = []
+    @Published var lookaheadPoint: CGPoint = .zero
+    @Published var projectedPoint: CGPoint = .zero
+    @Published var guidanceConfidence: Double = 1.0
+    @Published var lookaheadDistance: Double = 10.0
+
+    // MARK: - UI State
+
+    @Published var isSimulatorDrawerExpanded: Bool = false
+    @Published var isCoordinateReadoutExpanded: Bool = false
+
     // MARK: - Position Source
 
     @Published var positionSourceType: PositionSourceType = .simulator {
@@ -435,6 +449,9 @@ class AgGuidanceState: ObservableObject {
             alongTrackDistance = guidance.alongTrackDistance
             isPastEndPoint = guidance.isPastEndPoint
 
+            // Calculate track vector data for visualization
+            updateTrackVectorData(abHeading: engine.abLine.heading)
+
             // Auto-switch to nearest line when close enough and roughly aligned
             let nearestLine = guidance.nearestLineIndex
             if nearestLine != currentLineIndex {
@@ -792,5 +809,41 @@ class AgGuidanceState: ObservableObject {
             renderDistance: renderDistance,
             activeLineIndex: currentLineIndex
         ) ?? []
+    }
+
+    // MARK: - Track Vector Calculation
+
+    /// Updates track vector data for visualization (desired path, lookahead, errors)
+    private func updateTrackVectorData(abHeading: Double) {
+        let result = TrackVectorCalculator.calculateStraightLine(
+            vehicleX: workPointX,
+            vehicleZ: workPointZ,
+            vehicleHeading: workPointHeading,
+            targetLineIndex: currentLineIndex,
+            lineSpacing: guidanceSpacing,
+            abHeading: abHeading,
+            lookaheadDistance: lookaheadDistance,
+            gnssAccuracy: gnssAccuracy > 0 ? gnssAccuracy : 0
+        )
+
+        desiredPathPoints = result.desiredPath
+        lookaheadPoint = result.lookaheadPoint
+        projectedPoint = result.projectedPoint
+        headingError = result.headingError
+        guidanceConfidence = result.confidence
+    }
+
+    /// Returns current track vector result for scene rendering
+    func getTrackVectorData() -> TrackVectorResult? {
+        guard guidanceEngine != nil else { return nil }
+        return TrackVectorResult(
+            desiredPath: desiredPathPoints,
+            lookaheadPoint: lookaheadPoint,
+            projectedPoint: projectedPoint,
+            lateralError: crossTrackError,
+            headingError: headingError,
+            confidence: guidanceConfidence,
+            alongTrackDistance: alongTrackDistance
+        )
     }
 }
