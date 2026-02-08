@@ -1,0 +1,15 @@
+
+version: '3'
+
+services:
+  isoxml_viewer:
+    build: .
+    container_name: "isoxml_viewer"
+    restart: unless-stopped
+    networks:
+      - isoxml_viewer_network
+
+networks:
+  isoxml_viewer_network:
+    external:
+      name: isoxml_viewer_network

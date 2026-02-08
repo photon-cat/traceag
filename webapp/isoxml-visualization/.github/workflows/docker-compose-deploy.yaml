@@ -1,0 +1,26 @@
+name: Deploy docker-compose CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build_and_deploy:
+    runs-on: self-hosted
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build the Docker image
+      run: docker-compose build
+    - name: Create Docker network
+      run: docker network create isoxml_viewer_network || true
+    - name: Kill the current version
+      run: docker-compose down
+    - name: Start the new version
+      run: docker-compose up -d
+  cleanup:
+    runs-on: self-hosted
+    steps:
+    - name: Cleanup
+      run: docker system prune -f

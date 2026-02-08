@@ -1,0 +1,82 @@
+import { TAGS } from './constants'
+import { ISOXMLManager } from '../ISOXMLManager'
+import { registerEntityClass } from '../classRegistry'
+import { fromXML, toXML } from '../utils'
+import { XMLElement } from '../types'
+
+{{#children}}
+{{#ifnoteq className ../name }}
+import { {{className}} } from './{{className}}'
+{{/ifnoteq}}
+{{/children}}
+
+import { Entity, EntityConstructor, AttributesDescription{{#if includeReference}}, ISOXMLReference{{/if}} } from '../types'
+
+{{#attributes}}
+{{#if typeEnum}}
+export enum {{../prefix}}{{../name}}{{name}}Enum {
+    {{#typeEnum}}
+    {{name}} = '{{value}}',
+    {{/typeEnum}}
+}
+{{/if}}
+{{/attributes}}
+
+export type {{prefix}}{{name}}Attributes = {
+{{#attributes}}
+    {{#unless isPrimaryId}}
+    {{name}}{{#if isOptional}}?{{/if}}: {{#if typeEnum}}{{../prefix}}{{../name}}{{name}}Enum{{else}}{{type}}{{/if}}
+    {{/unless}}
+{{/attributes}}
+{{#children}}
+    {{name}}?: {{className}}[]
+{{/children}}
+    ProprietaryAttributes?: {[name: string]: string}
+    ProprietaryTags?: {[tag: string]: XMLElement[]}
+}
+
+const ATTRIBUTES: AttributesDescription = {
+    {{#attributes}}
+    {{xmlName}}: {
+        name: '{{name}}',
+        type: '{{xsdType}}',
+        isPrimaryId: {{toString isPrimaryId}},
+        isOptional: {{toString isOptional}},
+        isOnlyV4: {{toString isOnlyV4}},
+        {{#if (isdefined numericalRestrictions.minValue)}}
+        minValue: {{numericalRestrictions.minValue}},
+        {{/if}}
+        {{#if (isdefined numericalRestrictions.maxValue)}}
+        maxValue: {{numericalRestrictions.maxValue}},
+        {{/if}}
+        {{#if (isdefined numericalRestrictions.fractionDigits)}}
+        fractionDigits: {{numericalRestrictions.fractionDigits}},
+        {{/if}}
+        {{#if (isdefined numericalRestrictions.allowEmptyString)}}
+        allowEmptyString: {{numericalRestrictions.allowEmptyString}},
+        {{/if}}
+    },
+    {{/attributes}}
+}
+const CHILD_TAGS = {
+    {{#children}}
+    {{tag}}: { name: '{{name}}', isOnlyV4: {{toString isOnlyV4}} },
+    {{/children}}
+}
+
+export class {{prefix}}{{name}} implements Entity {
+    public tag = TAGS.{{name}}
+
+    constructor(public attributes: {{prefix}}{{name}}Attributes, public isoxmlManager: ISOXMLManager) {
+    }
+
+    static fromXML(xml: XMLElement, isoxmlManager: ISOXMLManager, internalId?: string, targetClass: EntityConstructor = {{prefix}}{{name}}): Promise<Entity> {
+        return fromXML(xml, isoxmlManager, targetClass, ATTRIBUTES, CHILD_TAGS, internalId)
+    }
+
+    toXML(): XMLElement {
+        return toXML(this, ATTRIBUTES, CHILD_TAGS)
+    }
+}
+
+registerEntityClass('{{realm}}', TAGS.{{name}}, {{prefix}}{{name}})
