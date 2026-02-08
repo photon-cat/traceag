@@ -3,6 +3,7 @@ Main entry point for localizer demo.
 
 Usage:
     python -m pygamesim.main
+    python -m pygamesim.main --isoxml path/to/taskdata.zip
 
 Controls:
     Arrow keys / WASD: Drive
@@ -15,9 +16,11 @@ Controls:
     +/-: Zoom in/out
     L: Toggle logging
     R: Reset position
+    I: Load ISOXML file (opens file dialog)
     Q/ESC: Quit
 """
 
+import argparse
 import math
 import sys
 import time
@@ -30,10 +33,113 @@ from .guidance import ABGuidance
 from .vehicle import VehicleSimulator
 from .renderer import Renderer
 from .logger import CSVLogger
+from .isoxml.parser import ISOXMLParser
+from .isoxml.models import GuidanceLineType
+
+
+def load_isoxml_guidance(filepath: str) -> tuple:
+    """
+    Load guidance and boundary from ISOXML file.
+
+    Returns:
+        tuple: (guidance_line, origin_lat, origin_lon, swath_width, boundary_local)
+               or (None, None, None, None, None)
+    """
+    print(f"Loading ISOXML from: {filepath}")
+    parser = ISOXMLParser()
+
+    try:
+        result = parser.parse_file(filepath, import_to_db=False)
+        print(f"Parsed: {result.get('partfields', 0)} partfields, {result.get('guidance_lines', 0)} guidance lines")
+
+        origin_lat = None
+        origin_lon = None
+        swath_width = 6.0
+        gl = None
+        boundary_local = None
+
+        # Find guidance lines first to get origin
+        if parser.guidance_lines:
+            gl_id, gl = next(iter(parser.guidance_lines.items()))
+            print(f"Found guidance line: {gl_id}, type={gl.type}, points={len(gl.points)}")
+
+            if gl.points and len(gl.points) >= 2:
+                # Use first point as origin
+                origin_lat = gl.points[0].latitude
+                origin_lon = gl.points[0].longitude
+                swath_width = gl.spacing_m if gl.spacing_m else 6.0
+
+                print(f"Origin: ({origin_lat:.6f}, {origin_lon:.6f})")
+                print(f"Swath width: {swath_width}m")
+                if gl.heading_deg:
+                    print(f"Heading: {gl.heading_deg}°")
+
+        # Find partfield boundary
+        if parser.partfields and origin_lat is not None:
+            pf_id, pf = next(iter(parser.partfields.items()))
+            print(f"Found partfield: {pf_id}, name={pf.name}")
+
+            if pf.boundary and len(pf.boundary) >= 3:
+                print(f"Boundary has {len(pf.boundary)} points")
+                # Convert boundary to local coordinates
+                boundary_local = []
+                for bp in pf.boundary:
+                    local = bp.to_local(origin_lat, origin_lon)
+                    boundary_local.append(local)
+                print(f"Boundary converted to local coordinates")
+
+        if gl is None:
+            print("No guidance lines found in ISOXML file")
+            return None, None, None, None, None
+
+        return gl, origin_lat, origin_lon, swath_width, boundary_local
+
+    except Exception as e:
+        print(f"Error loading ISOXML: {e}")
+        import traceback
+        traceback.print_exc()
+        return None, None, None, None, None
+
+
+def setup_guidance_from_isoxml(guidance: ABGuidance, gl, origin_lat: float, origin_lon: float):
+    """Set up ABGuidance from ISOXML guidance line."""
+    if not gl or not gl.points or len(gl.points) < 2:
+        return False
+
+    # Convert WGS84 to local coordinates
+    local_points = gl.get_local_points(origin_lat, origin_lon)
+
+    if gl.type == GuidanceLineType.STRAIGHT_AB or len(local_points) == 2:
+        # Straight AB line
+        ax, ay = local_points[0]
+        bx, by = local_points[1]
+
+        guidance.set_a_point(ax, ay)
+        guidance.set_b_point(bx, by)
+
+        print(f"AB Line set: A=({ax:.2f}, {ay:.2f}), B=({bx:.2f}, {by:.2f})")
+        if guidance.ab_line and guidance.ab_line.is_valid:
+            print(f"Heading: {math.degrees(guidance.ab_line.heading):.1f}°, Length: {guidance.ab_line.length:.1f}m")
+        return True
+    else:
+        # Curved AB line (would need CurvedABGuidance)
+        print(f"Curved guidance with {len(local_points)} points - using first 2 as AB")
+        ax, ay = local_points[0]
+        bx, by = local_points[-1]
+        guidance.set_a_point(ax, ay)
+        guidance.set_b_point(bx, by)
+        return True
 
 
 def main():
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description="Agricultural Guidance Simulator")
+    parser.add_argument("--isoxml", "-i", type=str, help="Path to ISOXML TaskData file (.xml or .zip)")
+    parser.add_argument("--swath", "-s", type=float, default=6.0, help="Swath width in meters (default: 6.0)")
+    args = parser.parse_args()
+
     # Configuration
+    swath_width = args.swath
     machine_geom = MachineGeometry(
         antenna_pivot=1.0,
         hitch_length=1.5
@@ -41,7 +147,7 @@ def main():
 
     implement_geom = ImplementGeometry(
         pivot_offset=5.0,
-        width=6.0,
+        width=swath_width,
         is_pivoting=True
     )
 
@@ -53,6 +159,19 @@ def main():
     renderer = Renderer(width=1200, height=800)
     logger = CSVLogger(output_dir=".")
     logging_enabled = False
+
+    # Load ISOXML if provided
+    if args.isoxml:
+        gl, origin_lat, origin_lon, iso_swath, boundary_local = load_isoxml_guidance(args.isoxml)
+        if gl:
+            if iso_swath:
+                guidance.swath_width = iso_swath
+                implement_geom.width = iso_swath
+            setup_guidance_from_isoxml(guidance, gl, origin_lat, origin_lon)
+            if boundary_local:
+                renderer.set_boundary(boundary_local)
+                print(f"Field boundary loaded with {len(boundary_local)} points")
+            print("ISOXML guidance loaded successfully!")
 
     # Implement state and coverage
     implement_active = False
@@ -136,6 +255,35 @@ def main():
                         coverage_points.append(None)
                     implement_active = not implement_active
                     print(f"Implement: {'ON - painting' if implement_active else 'OFF'}")
+                elif event.key == pygame.K_i:
+                    # Load ISOXML file interactively
+                    try:
+                        import tkinter as tk
+                        from tkinter import filedialog
+                        root = tk.Tk()
+                        root.withdraw()
+                        filepath = filedialog.askopenfilename(
+                            title="Select ISOXML TaskData file",
+                            filetypes=[
+                                ("ISOXML files", "*.zip *.xml *.XML"),
+                                ("ZIP files", "*.zip"),
+                                ("XML files", "*.xml *.XML"),
+                                ("All files", "*.*")
+                            ]
+                        )
+                        root.destroy()
+                        if filepath:
+                            gl, origin_lat, origin_lon, iso_swath, boundary_local = load_isoxml_guidance(filepath)
+                            if gl:
+                                if iso_swath:
+                                    guidance.swath_width = iso_swath
+                                setup_guidance_from_isoxml(guidance, gl, origin_lat, origin_lon)
+                                if boundary_local:
+                                    renderer.set_boundary(boundary_local)
+                                    print(f"Boundary loaded: {len(boundary_local)} points")
+                                print("ISOXML guidance loaded!")
+                    except ImportError:
+                        print("tkinter not available - use --isoxml command line argument")
 
         # Handle continuous key presses (arrow keys like original)
         keys = pygame.key.get_pressed()

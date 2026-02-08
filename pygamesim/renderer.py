@@ -62,7 +62,12 @@ class Renderer:
             'a_point': (255, 100, 100),
             'b_point': (100, 100, 255),
             'track_vector': (255, 200, 100),
+            'boundary': (255, 165, 0),  # Orange for field boundary
+            'boundary_fill': (255, 165, 0, 30),  # Semi-transparent fill
         }
+
+        # Field boundary (list of (x, y) points in local coordinates)
+        self.boundary_points: List[Tuple[float, float]] = []
 
     def world_to_screen(self, x: float, y: float,
                         view_center_x: float = None,
@@ -80,8 +85,8 @@ class Renderer:
 
         # Apply rotation if heading-up mode
         if self._view_rotation != 0.0:
-            cos_r = math.cos(-self._view_rotation)
-            sin_r = math.sin(-self._view_rotation)
+            cos_r = math.cos(self._view_rotation)
+            sin_r = math.sin(self._view_rotation)
             rx = dx * cos_r - dy * sin_r
             ry = dx * sin_r + dy * cos_r
             dx, dy = rx, ry
@@ -205,6 +210,30 @@ class Renderer:
         # Draw implement center marker
         impl_screen = self.world_to_screen(impl_x, impl_y)
         pygame.draw.circle(self.screen, color, impl_screen, 4)
+
+    def set_boundary(self, points: List[Tuple[float, float]]) -> None:
+        """Set the field boundary points (local coordinates)."""
+        self.boundary_points = points
+
+    def draw_boundary(self) -> None:
+        """Draw field boundary polygon."""
+        if len(self.boundary_points) < 3:
+            return
+
+        # Convert to screen coordinates
+        screen_points = [self.world_to_screen(x, y) for x, y in self.boundary_points]
+
+        # Draw semi-transparent fill
+        boundary_surface = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+        pygame.draw.polygon(boundary_surface, (255, 165, 0, 40), screen_points)
+        self.screen.blit(boundary_surface, (0, 0))
+
+        # Draw boundary outline
+        pygame.draw.polygon(self.screen, self.colors['boundary'], screen_points, 2)
+
+        # Draw vertices
+        for point in screen_points:
+            pygame.draw.circle(self.screen, self.colors['boundary'], point, 4)
 
     def draw_guidance_lines(self, guidance: ABGuidance) -> None:
         """Draw AB guidance lines."""
@@ -396,6 +425,9 @@ class Renderer:
 
         # Draw grid
         self.draw_grid(view_center_x, view_center_y)
+
+        # Draw field boundary
+        self.draw_boundary()
 
         # Draw coverage paint (before other elements)
         if coverage_points:
